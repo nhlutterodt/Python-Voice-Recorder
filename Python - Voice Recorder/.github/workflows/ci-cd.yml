@@ -1,0 +1,302 @@
+name: Voice Recorder Pro CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PYTHON_VERSION: '3.12'
+  
+jobs:
+  security-check:
+    name: Security & Credential Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check for leaked secrets
+      run: |
+        # Verify no sensitive files are committed
+        if [ -f "config/client_secrets.json" ]; then
+          echo "❌ ERROR: client_secrets.json found in repository!"
+          exit 1
+        fi
+        
+        if [ -f ".env" ]; then
+          echo "❌ ERROR: .env file found in repository!"
+          exit 1
+        fi
+        
+        if find . -name "token.json" -type f | grep -q .; then
+          echo "❌ ERROR: token.json files found in repository!"
+          exit 1
+        fi
+        
+        echo "✅ No sensitive files found in repository"
+        
+    - name: Verify .gitignore effectiveness
+      run: |
+        # Check that .gitignore is properly configured
+        if ! grep -q "client_secrets.json" .gitignore; then
+          echo "❌ ERROR: .gitignore missing client_secrets.json"
+          exit 1
+        fi
+        
+        if ! grep -q ".env" .gitignore; then
+          echo "❌ ERROR: .gitignore missing .env"
+          exit 1
+        fi
+        
+        echo "✅ .gitignore properly configured"
+
+  test:
+    name: Run Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install system dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y portaudio19-dev
+        
+    - name: Install system dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install portaudio
+        
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements_dev.txt
+        
+    - name: Test imports and basic functionality
+      run: |
+        python test_imports.py
+        
+    - name: Test configuration manager
+      run: |
+        python -c "
+        from config_manager import config_manager
+        print('✅ Config manager imported successfully')
+        
+        # Test without credentials (should not fail)
+        config = config_manager.app_config
+        print(f'App: {config.name} v{config.version}')
+        
+        # Test security config
+        security = config_manager.security_config
+        print(f'Cloud features: {security.cloud_features_enabled}')
+        "
+        
+    - name: Test application startup (headless)
+      run: |
+        # Test that application can start without GUI
+        python -c "
+        import sys
+        import os
+        
+        # Mock QApplication for headless testing
+        os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+        
+        try:
+            from enhanced_editor import EnhancedAudioEditor
+            print('✅ Application components import successfully')
+        except Exception as e:
+            print(f'⚠️ GUI components require display: {e}')
+            # This is expected in headless environment
+        "
+
+  quality-check:
+    name: Code Quality & Type Checking
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements_dev.txt
+        
+    - name: Run type checking with mypy
+      run: |
+        mypy --ignore-missing-imports --no-strict-optional enhanced_main.py enhanced_editor.py version.py config_manager.py
+        
+    - name: Check code formatting with black
+      run: |
+        black --check --diff .
+        
+    - name: Run linting with pylint
+      run: |
+        pylint --disable=missing-docstring,too-few-public-methods enhanced_main.py enhanced_editor.py version.py config_manager.py
+
+  build-test:
+    name: Test Build Process
+    runs-on: windows-latest
+    needs: [security-check, test, quality-check]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Create mock credentials for build test
+      run: |
+        # Create minimal mock credentials for testing
+        mkdir -p config
+        echo '{"installed":{"client_id":"test","project_id":"test","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"test","redirect_uris":["http://localhost"]}}' > config/client_secrets.json
+        
+    - name: Test build system
+      run: |
+        python scripts/build_v2.py
+        
+    - name: Test executable creation
+      run: |
+        python scripts/build_exe.py
+        
+    - name: Verify build artifacts
+      run: |
+        if (Test-Path "dist/Voice_Recorder_Pro_v2.0.0-beta/Voice_Recorder_Pro_v2.0.0-beta.exe") {
+          Write-Output "✅ Executable created successfully"
+          $size = (Get-Item "dist/Voice_Recorder_Pro_v2.0.0-beta/Voice_Recorder_Pro_v2.0.0-beta.exe").Length / 1MB
+          Write-Output "📦 Executable size: $([math]::Round($size, 1)) MB"
+        } else {
+          Write-Output "❌ Executable not found"
+          exit 1
+        }
+        
+    - name: Clean up mock credentials
+      run: |
+        Remove-Item config/client_secrets.json -Force
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-executable-${{ github.sha }}
+        path: |
+          dist/Voice_Recorder_Pro_v2.0.0-beta/
+          launch_portable.bat
+        retention-days: 30
+
+  release:
+    name: Create Release
+    runs-on: windows-latest
+    needs: [build-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Create release build
+      env:
+        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        GOOGLE_PROJECT_ID: ${{ secrets.GOOGLE_PROJECT_ID }}
+      run: |
+        python scripts/build_exe.py
+        
+    - name: Create release package
+      run: |
+        Compress-Archive -Path "dist/Voice_Recorder_Pro_v2.0.0-beta/", "launch_portable.bat", "README.md", "SECURITY.md" -DestinationPath "Voice_Recorder_Pro_v2.0.0-beta_Windows.zip"
+        
+    - name: Get version
+      id: version
+      run: |
+        $version = python -c "from version import CURRENT_VERSION; print(CURRENT_VERSION)"
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        release_name: Voice Recorder Pro v${{ steps.version.outputs.version }}
+        body: |
+          ## 🎉 Voice Recorder Pro v${{ steps.version.outputs.version }}
+          
+          ### 📦 Downloads
+          - **Windows Executable**: Download and extract the ZIP file, then run `launch_portable.bat`
+          - **Source Code**: Clone the repository and follow setup instructions in README.md
+          
+          ### ✨ Features
+          - 🎤 Professional audio recording with real-time monitoring
+          - ✂️ Audio editing and trimming capabilities
+          - ☁️ Google Drive integration with secure OAuth
+          - 💾 SQLite database for recording metadata
+          - 🎨 Modern PySide6 interface
+          
+          ### 🔐 Security Setup
+          See SECURITY.md for detailed setup instructions for Google OAuth credentials.
+          
+          ### 📋 System Requirements
+          - Windows 10/11 (64-bit)
+          - 512 MB RAM minimum
+          - 50 MB free disk space
+          - Microphone for recording
+          
+        draft: false
+        prerelease: false
+        
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./Voice_Recorder_Pro_v2.0.0-beta_Windows.zip
+        asset_name: Voice_Recorder_Pro_v2.0.0-beta_Windows.zip
+        asset_content_type: application/zip

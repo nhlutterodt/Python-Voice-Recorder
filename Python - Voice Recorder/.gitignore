@@ -1,0 +1,192 @@
+# Voice Recorder Pro - GitHub Security Configuration
+# This file prevents sensitive data from being committed to the repository
+
+# ============================================================================
+# SECURITY: Credentials and Secrets
+# ============================================================================
+
+# Google OAuth credentials (NEVER commit these!)
+config/client_secrets.json
+cloud/credentials/
+cloud/credentials/*.json
+**/client_secrets.json
+**/token.json
+
+# API keys and tokens
+*.key
+*.pem
+*.p12
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Database files with potentially sensitive data
+db/
+*.db
+*.sqlite
+*.sqlite3
+
+# User-specific recordings (potentially sensitive audio)
+recordings/raw/
+recordings/edited/
+recordings/*.wav
+recordings/*.mp3
+recordings/*.ogg
+
+# ============================================================================
+# DEVELOPMENT & BUILD ARTIFACTS
+# ============================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+venv312/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ============================================================================
+# SYSTEM AND TEMPORARY FILES
+# ============================================================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Linux
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+logs/
+
+# ============================================================================
+# APPLICATION SPECIFIC
+# ============================================================================
+
+# Build outputs
+build_info.json
+*.exe
+*.msi
+*.dmg
+*.pkg
+
+# Configuration backups
+config/*.bak
+config/*.backup
+
+# Performance monitoring
+performance_*.json
+performance_*.log
+
+# Testing artifacts
+test_recordings/
+temp_recordings/
+*.test
+
+# ============================================================================
+# CLOUD PROVIDER SPECIFIC
+# ============================================================================
+
+# Google Cloud
+gcloud/
+.gcp/
+*-key.json
+*-credentials.json
+service-account*.json
+
+# AWS
+.aws/
+*.pem
+
+# Azure
+.azure/
+
+# ============================================================================
+# DOCUMENTATION BUILD
+# ============================================================================
+
+# Sphinx documentation
+docs/_build/
+doc/_build/
+site/

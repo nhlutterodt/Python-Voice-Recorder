@@ -1,0 +1,14 @@
+{
+  "export_profiles": [
+    {
+      "name": "High Quality MP3",
+      "format": "mp3",
+      "bitrate": "320k"
+    },
+    {
+      "name": "Compressed OGG",
+      "format": "ogg",
+      "quality": 5
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+# Python / venv
+.venv/
+env/
+venv/
+
+# Builds
+build/
+dist/
+*.spec
+
+# Bytecode
+__pycache__/
+*.py[cod]
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Secrets
+*.pem
+*.pfx
+secrets.json
