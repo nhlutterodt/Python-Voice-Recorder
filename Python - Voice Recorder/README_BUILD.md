@@ -2,8 +2,8 @@
 
 ## Build Information
 - **Version**: 2.0.0-beta
-- **Build Date**: 2025-08-15
-- **Python Version**: 3.13.2
+- **Build Date**: 2025-09-04
+- **Python Version**: 3.12.10
 - **Platform**: win32
 
 ## Features

@@ -2,7 +2,7 @@
 title Voice Recorder Pro v2.0.0-beta
 echo.
 echo Starting Voice Recorder Pro v2.0.0-beta...
-echo Build Date: 2025-08-15
+echo Build Date: 2025-09-04
 echo.
 
 cd /d "%~dp0"

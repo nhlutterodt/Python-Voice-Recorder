@@ -63,6 +63,34 @@ pip install -r requirements_cloud.txt
 
 ## 📖 Documentation
 
+## 🛠️ Local development setup (recommended)
+
+Follow these steps to prepare a reproducible local development environment. This approach is persistent and configurable via environment variables or a `.env` file.
+
+1. From the repository root run the one-line setup script (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\Python - Voice Recorder\scripts\setup_local_env.ps1"
+```
+
+- This will create required directories (`db`, `recordings/`, `logs`, `config`).
+- It will create a `venv` if none exists, upgrade pip, install packages from `Python - Voice Recorder/requirements.txt`, and initialize the database tables.
+- The script also writes a `.env.template` (if requested) so you can copy it to `.env` and customize local settings.
+
+2. Activate the virtual environment and run the app:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+python ".\Python - Voice Recorder\enhanced_main.py"
+```
+
+Configuration notes:
+- You can override any app path or setting via environment variables (see `config_manager.py`). The most important is `DATABASE_URL` (for example `sqlite:///db/app.db` or a full absolute sqlite path). If you set a relative sqlite URL, it will be resolved against the project root and the parent directory will be created automatically.
+- To enable cloud features, set the Google credentials either through environment variables or by placing `client_secrets.json` into the `config/` folder. See `config_manager.py` and the Cloud Setup Guide for details.
+
+This setup is deterministic and intended for developer machines and CI. If you want cross-platform parity, I can add an equivalent Bash script for macOS/Linux.
+
+
 - **[Quick Start Guide](docs/quickstart/README.md)** - Get up and running in minutes
 - **[Build Instructions](README_BUILD.md)** - Technical build documentation
 - **[Development Summary](DEVELOPMENT_SUMMARY.md)** - Project development story

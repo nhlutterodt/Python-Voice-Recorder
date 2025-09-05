@@ -4,18 +4,19 @@ Enhanced Build Script for Voice Recorder Pro
 Creates a professional executable with human-friendly naming
 """
 
-import os
 import sys
 import subprocess
 import shutil
+import os
+import stat
 from pathlib import Path
-from typing import List, Optional
+ 
 import json
 import datetime
 
 # Import version information
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from version import CURRENT_VERSION, get_version_info, APP_NAME
+from version import CURRENT_VERSION, get_version_info
 
 class VoiceRecorderBuilder:
     """Professional build system for Voice Recorder Pro with human-friendly names"""
@@ -32,8 +33,10 @@ class VoiceRecorderBuilder:
         self.exe_name = "VoiceRecorderPro"
         self.version_string = str(CURRENT_VERSION)
         self.build_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        # Detect optional UPX availability for the spec
+        self.upx_available: bool = shutil.which('upx') is not None
         
-    def clean_build(self) -> None:
+    def clean_build(self) -> bool:
         """Clean previous build artifacts"""
         print("🧹 Cleaning build directories...")
         
@@ -43,83 +46,95 @@ class VoiceRecorderBuilder:
             self.project_root / "__pycache__",
         ]
         
+        def _on_rm_error(func, path, exc_info):
+            """Error handler for shutil.rmtree to handle read-only files."""
+            try:
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+            except Exception as e:
+                print(f"   ⚠️ Failed to remove {path}: {e}")
+
         for directory in directories_to_clean:
             if directory.exists() and directory.is_dir():
-                shutil.rmtree(directory)
-                print(f"   ✅ Removed {directory.name}")
+                try:
+                    shutil.rmtree(directory, onerror=_on_rm_error)
+                    print(f"   ✅ Removed {directory.name}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not remove {directory}: {e}")
         
         # Clean Python cache files
         for cache_dir in self.project_root.rglob("__pycache__"):
             if cache_dir.exists():
-                shutil.rmtree(cache_dir)
-                print(f"   ✅ Removed cache: {cache_dir.relative_to(self.project_root)}")
+                try:
+                    shutil.rmtree(cache_dir, onerror=_on_rm_error)
+                    print(f"   ✅ Removed cache: {cache_dir.relative_to(self.project_root)}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not remove cache {cache_dir}: {e}")
         
         # Clean old spec files
         for spec_file in self.project_root.glob("*.spec"):
-            spec_file.unlink()
-            print(f"   ✅ Removed old spec: {spec_file.name}")
+            try:
+                spec_file.unlink()
+                print(f"   ✅ Removed old spec: {spec_file.name}")
+            except Exception as e:
+                print(f"   ⚠️ Could not remove spec {spec_file.name}: {e}")
             
         print("   🎯 Build environment cleaned!")
+        return True
     
-    def check_dependencies(self) -> bool:
-        """Check if all required dependencies are installed"""
-        print("📦 Checking dependencies...")
+    def _check_package_import(self, display_name: str, import_name: str) -> tuple[bool, bool]:
+        """
+        Check if a package can be imported.
         
-        required_packages = {
-            "PySide6": "PySide6",
-            "pydub": "pydub", 
-            "sounddevice": "sounddevice",
-            "sqlalchemy": "sqlalchemy"
-        }
+        Returns:
+            tuple[bool, bool]: (success, is_pydub_audioop_issue)
+        """
+        try:
+            __import__(import_name)
+            return True, False
+        except ImportError as e:
+            # Special handling for pydub audioop issues
+            is_pydub_audioop = display_name == 'pydub' and 'audioop' in str(e)
+            return False, is_pydub_audioop
+    
+    def _check_package_group(self, packages: dict[str, str], group_name: str, 
+                           icon_success: str = "✅", icon_missing: str = "❌") -> list[str]:
+        """
+        Check a group of packages and return list of missing ones.
         
-        cloud_packages = {
-            "google-auth": "google.auth",
-            "google-auth-oauthlib": "google_auth_oauthlib",
-            "google-api-python-client": "googleapiclient"
-        }
+        Args:
+            packages: Dict mapping display_name -> import_name
+            group_name: Human-readable group name for logging
+            icon_success: Icon for successful imports
+            icon_missing: Icon for missing packages
+            
+        Returns:
+            List of missing package display names
+        """
+        missing: list[str] = []
         
-        build_packages = {
-            "pyinstaller": "PyInstaller"
-        }
+        for display_name, import_name in packages.items():
+            success, is_pydub_audioop = self._check_package_import(display_name, import_name)
+            
+            if success:
+                print(f"   {icon_success} {display_name} ({group_name})")
+            elif is_pydub_audioop:
+                print(f"   ⚠️ {display_name} (imported but audioop missing; audio features may be limited)")
+                missing.append(display_name)  # Mark as non-fatal but still track
+            else:
+                missing.append(display_name)
+                print(f"   {icon_missing} {display_name} ({group_name})")
         
-        missing_required = []
-        missing_cloud = []
-        missing_build = []
+        return missing
+    
+    def _report_missing_packages(self, missing_required: list[str], missing_cloud: list[str], 
+                               missing_build: list[str]) -> bool:
+        """
+        Report missing packages and return whether build can continue.
         
-        # Check required packages. pydub may fail to import on some Python builds
-        # that lack the C 'audioop' extension. Treat that specific failure as a
-        # soft-warning so builds can continue while informing the user.
-        for display_name, import_name in required_packages.items():
-            try:
-                __import__(import_name)
-                print(f"   ✅ {display_name}")
-            except ImportError as e:
-                # Special-case pydub audioop-related failures
-                if display_name == 'pydub' and 'audioop' in str(e):
-                    print(f"   ⚠️ {display_name} (imported but audioop missing; audio features may be limited)")
-                    missing_cloud.append(display_name)  # mark as non-fatal
-                else:
-                    missing_required.append(display_name)
-                    print(f"   ❌ {display_name} (REQUIRED)")
-        
-        # Check cloud packages
-        for display_name, import_name in cloud_packages.items():
-            try:
-                __import__(import_name)
-                print(f"   ✅ {display_name} (cloud)")
-            except ImportError:
-                missing_cloud.append(display_name)
-                print(f"   ⚠️ {display_name} (cloud - optional)")
-        
-        # Check build packages
-        for display_name, import_name in build_packages.items():
-            try:
-                __import__(import_name)
-                print(f"   ✅ {display_name} (build tool)")
-            except ImportError:
-                missing_build.append(display_name)
-                print(f"   ⚠️ {display_name} (for EXE creation)")
-        
+        Returns:
+            bool: True if build can continue, False if critical packages missing
+        """
         if missing_required:
             print(f"\n❌ Missing required packages: {', '.join(missing_required)}")
             print("Install with: pip install " + " ".join(missing_required))
@@ -135,6 +150,37 @@ class VoiceRecorderBuilder:
         
         return True
     
+    def check_dependencies(self) -> bool:
+        """Check if all required dependencies are installed"""
+        print("📦 Checking dependencies...")
+        
+        # Define package groups
+        required_packages = {
+            "PySide6": "PySide6",
+            "pydub": "pydub", 
+            "Pillow": "PIL",
+            "sounddevice": "sounddevice",
+            "sqlalchemy": "sqlalchemy"
+        }
+        
+        cloud_packages = {
+            "google-auth": "google.auth",
+            "google-auth-oauthlib": "google_auth_oauthlib",
+            "google-api-python-client": "googleapiclient"
+        }
+        
+        build_packages = {
+            "pyinstaller": "PyInstaller"
+        }
+        
+        # Check each package group
+        missing_required = self._check_package_group(required_packages, "REQUIRED", "✅", "❌")
+        missing_cloud = self._check_package_group(cloud_packages, "cloud - optional", "✅", "⚠️")
+        missing_build = self._check_package_group(build_packages, "for EXE creation", "✅", "⚠️")
+        
+        # Report results and determine if build can continue
+        return self._report_missing_packages(missing_required, missing_cloud, missing_build)
+    
     def verify_source_files(self) -> bool:
         """Verify all source files are present"""
         print("🔍 Verifying source files...")
@@ -148,8 +194,8 @@ class VoiceRecorderBuilder:
             "config_manager.py",
             "performance_monitor.py"
         ]
-        
-        missing_files = []
+
+        missing_files: list[str] = []
         for file_path in critical_files:
             full_path = self.project_root / file_path
             if not full_path.exists():
@@ -334,6 +380,10 @@ a = Analysis(
         'pydub.playback',
         'sounddevice',
         'numpy',
+            # Ensure plotting library is included if used
+            'matplotlib',
+            # Pillow (PIL) is used by matplotlib for image backends
+            'PIL',
         # Database
         'sqlalchemy',
         'sqlalchemy.dialects.sqlite',
@@ -360,10 +410,10 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         # Exclude unnecessary modules to reduce size
-        'matplotlib',
-        'pandas',
-        'scipy',
-        'PIL',
+    # 'matplotlib',  # removed from excludes: waveform_viewer imports matplotlib at runtime
+    'pandas',
+    'scipy',
+    # 'PIL',  # Pillow required by matplotlib; do not exclude
         'tkinter',
         'test',
         'unittest',
@@ -424,12 +474,19 @@ coll = COLLECT(
         print("🔨 Building standalone executable...")
         
         # Check if PyInstaller is available
+        # Prefer checking availability with importlib rather than importing
         try:
-            import PyInstaller
-            print(f"   ✅ PyInstaller version: {PyInstaller.__version__}")
-        except ImportError:
-            print("   ❌ PyInstaller not available")
-            print("   Install with: pip install pyinstaller")
+            import importlib.util
+            spec = importlib.util.find_spec('PyInstaller')
+            if spec is None:
+                print("   ❌ PyInstaller not available")
+                print("   Install with: pip install pyinstaller")
+                return False
+            else:
+                # PyInstaller is available, we'll invoke it via subprocess
+                print("   ✅ PyInstaller appears available")
+        except Exception:
+            print("   ❌ Error while checking for PyInstaller")
             return False
         
         try:

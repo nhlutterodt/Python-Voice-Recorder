@@ -1,9 +1,9 @@
 # Voice Recorder Pro v2.0.0-beta PowerShell Launcher
-# Build Date: 2025-08-15
+# Build Date: 2025-09-04
 
 Write-Host ""
 Write-Host "Starting Voice Recorder Pro v2.0.0-beta..." -ForegroundColor Green
-Write-Host "Build Date: 2025-08-15" -ForegroundColor Gray
+Write-Host "Build Date: 2025-09-04" -ForegroundColor Gray
 Write-Host ""
 
 $exePath = Join-Path $PSScriptRoot "dist\VoiceRecorderPro_v2.0.0-beta\VoiceRecorderPro.exe"
