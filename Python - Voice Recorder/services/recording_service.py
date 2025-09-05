@@ -4,13 +4,14 @@ import hashlib
 import mimetypes
 from pathlib import Path
 from typing import Optional
-from models.database import SessionLocal
+from models.database import db_context
 from repositories.recording_repository import RecordingRepository
 from models.recording import Recording
 from datetime import datetime, timezone
-import logging
 
-logger = logging.getLogger(__name__)
+from core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 RECORDINGS_DIR = Path("recordings/raw").resolve()
 RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -34,22 +35,31 @@ class RecordingService:
         if not src.exists():
             raise FileNotFoundError(f"Source file not found: {src}")
 
-        # determine mime and duration placeholder
-        mime_type, _ = mimetypes.guess_type(str(src))
-        mime_type = mime_type or "audio/wav"
-
-        # copy into recordings dir with uuid filename
-        stored_name = f"{uuid.uuid4().hex}{src.suffix}"
-        dest = RECORDINGS_DIR / stored_name
-        shutil.copy2(src, dest)
-
-        checksum = self._compute_checksum(dest)
-        filesize = dest.stat().st_size
-
-        # create DB row
-        session = SessionLocal()
-        repo = RecordingRepository(session)
         try:
+            # determine mime and duration placeholder
+            mime_type, _ = mimetypes.guess_type(str(src))
+            mime_type = mime_type or "audio/wav"
+
+            # copy into recordings dir with uuid filename
+            stored_name = f"{uuid.uuid4().hex}{src.suffix}"
+            dest = RECORDINGS_DIR / stored_name
+            shutil.copy2(src, dest)
+
+            checksum = self._compute_checksum(dest)
+            filesize = dest.stat().st_size
+        except PermissionError as e:
+            logger.error(f"Permission denied accessing file {src_path}: {e}")
+            raise
+        except OSError as e:
+            logger.error(f"File system error processing {src_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error processing file {src_path}: {e}")
+            raise
+
+        # create DB row using context manager
+        with db_context.get_session(autocommit=True) as session:
+            repo = RecordingRepository(session)
             rec = Recording(
                 filename=src.name,
                 stored_filename=stored_name if hasattr(Recording, "stored_filename") else None,
@@ -69,12 +79,6 @@ class RecordingService:
                 rec.checksum = checksum
 
             repo.add(rec)
-            session.commit()
             session.refresh(rec)
             logger.info("Created recording %s (checksum=%s)", rec.id, checksum)
             return rec
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()

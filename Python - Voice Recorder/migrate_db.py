@@ -8,12 +8,18 @@ import os
 import sys
 import shutil
 from pathlib import Path
+from typing import Optional
 from datetime import datetime
 from alembic.config import Config
 from alembic import command
 
+# Setup logging
+from core.logging_config import setup_application_logging, get_logger
+setup_application_logging("INFO")
+logger = get_logger("database.migration")
 
-def backup_database(db_path: Path) -> Path:
+
+def backup_database(db_path: Path) -> Optional[Path]:
     """Create a backup of the database before migration."""
     if not db_path.exists():
         return None
@@ -21,7 +27,7 @@ def backup_database(db_path: Path) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = db_path.parent / f"app_backup_{timestamp}.db"
     shutil.copy2(db_path, backup_path)
-    print(f"✓ Database backed up to: {backup_path}")
+    logger.info(f"✓ Database backed up to: {backup_path}")
     return backup_path
 
 
@@ -31,24 +37,25 @@ def run_migrations():
     project_root = Path(__file__).parent
     db_path = project_root / "db" / "app.db"
     
-    print("🔄 Voice Recorder Pro - Database Migration")
-    print(f"Database: {db_path}")
+    logger.info("🔄 Voice Recorder Pro - Database Migration")
+    logger.info(f"Database: {db_path}")
     
     # Create backup if database exists
     if db_path.exists():
         backup_path = backup_database(db_path)
-        print(f"📦 Backup created: {backup_path.name}")
+        if backup_path:
+            logger.info(f"📦 Backup created: {backup_path.name}")
     else:
-        print("📝 Creating new database")
+        logger.info("📝 Creating new database")
     
     # Configure Alembic
     alembic_cfg = Config(str(project_root / "alembic.ini"))
     
     try:
         # Run migrations
-        print("⚡ Running migrations...")
+        logger.info("⚡ Running migrations...")
         command.upgrade(alembic_cfg, "head")
-        print("✅ Migrations completed successfully!")
+        logger.info("✅ Migrations completed successfully!")
         
         # Show current version
         from alembic.runtime import migration
@@ -58,14 +65,15 @@ def run_migrations():
         with engine.connect() as conn:
             context = migration.MigrationContext.configure(conn)
             current_rev = context.get_current_revision()
-            print(f"📊 Current schema version: {current_rev}")
+            logger.info(f"📊 Current schema version: {current_rev}")
             
     except Exception as e:
-        print(f"❌ Migration failed: {e}")
-        if backup_path and backup_path.exists():
-            print(f"💾 Restoring from backup: {backup_path}")
+        logger.error(f"❌ Migration failed: {e}")
+        backup_path = None  # Initialize for safety
+        if 'backup_path' in locals() and backup_path and backup_path.exists():
+            logger.info(f"💾 Restoring from backup: {backup_path}")
             shutil.copy2(backup_path, db_path)
-            print("✅ Database restored from backup")
+            logger.info("✅ Database restored from backup")
         sys.exit(1)
 
 

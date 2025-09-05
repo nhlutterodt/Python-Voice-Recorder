@@ -160,7 +160,8 @@ class VoiceRecorderBuilder:
             "pydub": "pydub", 
             "Pillow": "PIL",
             "sounddevice": "sounddevice",
-            "sqlalchemy": "sqlalchemy"
+            "sqlalchemy": "sqlalchemy",
+            "alembic": "alembic"
         }
         
         cloud_packages = {
@@ -192,7 +193,9 @@ class VoiceRecorderBuilder:
             "audio_processing.py",
             "audio_recorder.py",
             "config_manager.py",
-            "performance_monitor.py"
+            "performance_monitor.py",
+            "migrate_db.py",
+            "alembic.ini"
         ]
 
         missing_files: list[str] = []
@@ -205,7 +208,7 @@ class VoiceRecorderBuilder:
                 print(f"   ✅ {file_path}")
         
         # Check critical directories
-        critical_dirs = ["cloud", "models", "config"]
+        critical_dirs = ["cloud", "models", "config", "alembic"]
         for dir_name in critical_dirs:
             dir_path = self.project_root / dir_name
             if not dir_path.exists():
@@ -351,6 +354,9 @@ added_files = [
     ('config', 'config'),
     ('cloud', 'cloud'),
     ('models', 'models'),
+    ('alembic', 'alembic'),
+    ('alembic.ini', '.'),
+    ('migrate_db.py', '.'),
     ('build_info.json', '.'),
     ('README_BUILD.md', '.'),
 ]
@@ -388,6 +394,14 @@ a = Analysis(
         'sqlalchemy',
         'sqlalchemy.dialects.sqlite',
         'sqlite3',
+        # Database migrations
+        'alembic',
+        'alembic.runtime',
+        'alembic.runtime.migration',
+        'alembic.operations',
+        'alembic.operations.ops',
+        'mako',
+        'mako.runtime',
         # Cloud (optional)
         'google.auth',
         'google.auth.transport',

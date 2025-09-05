@@ -1,16 +1,69 @@
 # init_db.py
-from models.database import Base, engine
+"""
+Database initialization for Voice Recorder Pro.
+Uses Alembic migrations for proper schema management.
+"""
+import sys
+from pathlib import Path
 
-# Import model modules so SQLAlchemy's declarative base knows about them
-# Add new model imports here as models are added to the project.
-try:
-    # explicit import to register the tables
-    import models.recording  # noqa: F401
-except Exception:
-    # If a model import fails, print a warning but still attempt to create tables
-    print("⚠️ Warning: Failed to import one or more model modules; tables may be missing.")
+# Add project root to Python path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
+# Setup logging
+from core.logging_config import setup_application_logging, get_logger
+setup_application_logging("INFO")
+logger = get_logger("database.init")
+
+def init_database():
+    """Initialize database using Alembic migrations."""
+    try:
+        # Import and run the migration script
+        from migrate_db import run_migrations
+        logger.info("Initializing database with migrations...")
+        run_migrations()
+        logger.info("Database initialized successfully!")
+        return True
+    except ModuleNotFoundError as e:
+        logger.error("Critical dependency missing for migrations: %s", e)
+        return False
+    except PermissionError as e:
+        logger.error("Permission denied during database initialization: %s", e)
+        return False
+    except OSError as e:
+        logger.error("File system error during initialization: %s", e)
+        return False
+    except ImportError:
+        logger.warning("Migration system not available, falling back to direct table creation...")
+        # Fallback to old method if Alembic is not available
+        from models.database import Base, engine
+        
+        # Import model modules so SQLAlchemy's declarative base knows about them
+        try:
+            import models.recording  # noqa: F401
+        except ModuleNotFoundError as e:
+            logger.error("Critical error: Recording model module not found: %s", e)
+            return False
+        except Exception as e:
+            logger.warning("Failed to import model modules: %s", e)
+        
+        try:
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database initialized with direct table creation.")
+            return True
+        except PermissionError as e:
+            logger.error("Permission denied accessing database: %s", e)
+            return False
+        except OSError as e:
+            logger.error("File system error initializing database: %s", e)
+            return False
+        except Exception as e:
+            logger.error("Database creation failed: %s", e, exc_info=True)
+            return False
+    except Exception as e:
+        logger.error("Failed to initialize database: %s", e, exc_info=True)
+        return False
 
 if __name__ == "__main__":
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database initialized.")
+    success = init_database()
+    sys.exit(0 if success else 1)

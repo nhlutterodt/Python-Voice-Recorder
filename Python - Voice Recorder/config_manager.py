@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
+from core.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 @dataclass
 class SecurityConfig:
     """Security configuration settings"""
@@ -74,11 +78,17 @@ class ConfigManager:
                         if line and not line.startswith('#') and '=' in line:
                             key, value = line.split('=', 1)
                             os.environ[key.strip()] = value.strip()
-                print("✅ Environment variables loaded from .env")
+                logger.info("✅ Environment variables loaded from .env")
+            except FileNotFoundError:
+                logger.info("ℹ️ .env file not found, using system environment variables")
+            except PermissionError as e:
+                logger.error(f"⚠️ Permission denied reading .env file: {e}")
+            except UnicodeDecodeError as e:
+                logger.error(f"⚠️ .env file encoding error: {e}")
             except Exception as e:
-                print(f"⚠️ Warning: Could not load .env file: {e}")
+                logger.warning(f"⚠️ Warning: Could not load .env file: {e}")
         else:
-            print("ℹ️ No .env file found, using system environment variables")
+            logger.info("ℹ️ No .env file found, using system environment variables")
     
     def _load_app_config(self) -> AppConfig:
         """Load application configuration from environment variables"""
@@ -144,8 +154,14 @@ class ConfigManager:
             try:
                 with open(secrets_file, 'r') as f:
                     return json.load(f)
+            except FileNotFoundError:
+                logger.warning(f"⚠️ client_secrets.json file not found at {secrets_file}")
+            except PermissionError as e:
+                logger.error(f"⚠️ Permission denied reading client_secrets.json: {e}")
+            except json.JSONDecodeError as e:
+                logger.error(f"⚠️ Invalid JSON in client_secrets.json: {e}")
             except Exception as e:
-                print(f"⚠️ Warning: Could not load client_secrets.json: {e}")
+                logger.warning(f"⚠️ Warning: Could not load client_secrets.json: {e}")
         
         return None
     
@@ -165,16 +181,20 @@ class ConfigManager:
             path_obj = self.project_root / path
             try:
                 path_obj.mkdir(parents=True, exist_ok=True)
+            except PermissionError as e:
+                issues.append(f"Permission denied creating directory {path}: {e}")
+            except OSError as e:
+                issues.append(f"File system error creating directory {path}: {e}")
             except Exception as e:
                 issues.append(f"Cannot create directory {path}: {e}")
         
         if issues:
-            print("❌ Configuration validation failed:")
+            logger.error("❌ Configuration validation failed:")
             for issue in issues:
-                print(f"   • {issue}")
+                logger.error(f"   • {issue}")
             return False
         
-        print("✅ Configuration validation successful")
+        logger.info("✅ Configuration validation successful")
         return True
     
     def create_secure_setup_guide(self) -> str:

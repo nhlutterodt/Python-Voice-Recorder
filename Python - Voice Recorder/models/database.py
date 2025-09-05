@@ -4,6 +4,11 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
+from core.logging_config import get_logger
+from core.database_context import DatabaseContextManager, configure_database_engine, get_database_file_info
+
+logger = get_logger(__name__)
+
 # Allow configuration via environment variable for flexibility and CI/production
 # Default to a local sqlite DB at project-root/db/app.db
 DEFAULT_DB_URL = "sqlite:///db/app.db"
@@ -19,13 +24,30 @@ if DATABASE_URL.startswith("sqlite:///"):
 	db_dir = db_file.parent
 	try:
 		db_dir.mkdir(parents=True, exist_ok=True)
-	except Exception:
-		# If we can't create the directory here, let SQLAlchemy raise an error later.
-		pass
+		logger.debug(f"Database directory ensured: {db_dir}")
+	except PermissionError as e:
+		logger.error(f"Permission denied creating database directory {db_dir}: {e}")
+		raise
+	except OSError as e:
+		logger.error(f"OS error creating database directory {db_dir}: {e}")
+		raise
+	except Exception as e:
+		# Fallback for any other unexpected errors
+		logger.warning(f"Could not create database directory {db_dir}: {e}. SQLAlchemy will handle this.")
 	# Rebuild DATABASE_URL as an absolute path for SQLAlchemy
 	DATABASE_URL = f"sqlite:///{db_file.as_posix()}"
 
 engine = create_engine(DATABASE_URL, echo=False, future=True)
 
+# Configure engine with performance optimizations
+configure_database_engine(engine)
+
+# Log database information
+db_info = get_database_file_info(DATABASE_URL)
+logger.info(f"Database configured: {db_info}")
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 Base = declarative_base()
+
+# Create database context manager instance
+db_context = DatabaseContextManager(SessionLocal)
