@@ -1,0 +1,80 @@
+import shutil
+import uuid
+import hashlib
+import mimetypes
+from pathlib import Path
+from typing import Optional
+from models.database import SessionLocal
+from repositories.recording_repository import RecordingRepository
+from models.recording import Recording
+from datetime import datetime, timezone
+import logging
+
+logger = logging.getLogger(__name__)
+
+RECORDINGS_DIR = Path("recordings/raw").resolve()
+RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+class RecordingService:
+    """Service to handle ingestion and metadata capture for recordings."""
+
+    def __init__(self):
+        pass
+
+    def _compute_checksum(self, path: Path) -> str:
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(8192), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def create_from_file(self, src_path: str, title: Optional[str] = None) -> Recording:
+        src = Path(src_path)
+        if not src.exists():
+            raise FileNotFoundError(f"Source file not found: {src}")
+
+        # determine mime and duration placeholder
+        mime_type, _ = mimetypes.guess_type(str(src))
+        mime_type = mime_type or "audio/wav"
+
+        # copy into recordings dir with uuid filename
+        stored_name = f"{uuid.uuid4().hex}{src.suffix}"
+        dest = RECORDINGS_DIR / stored_name
+        shutil.copy2(src, dest)
+
+        checksum = self._compute_checksum(dest)
+        filesize = dest.stat().st_size
+
+        # create DB row
+        session = SessionLocal()
+        repo = RecordingRepository(session)
+        try:
+            rec = Recording(
+                filename=src.name,
+                stored_filename=stored_name if hasattr(Recording, "stored_filename") else None,
+                title=title,
+                duration=0.0,
+                status="active",
+                created_at=datetime.now(timezone.utc),
+            )
+            # store extended fields if present on model
+            if hasattr(rec, "stored_filename"):
+                rec.stored_filename = stored_name
+            if hasattr(rec, "filesize_bytes"):
+                rec.filesize_bytes = filesize
+            if hasattr(rec, "mime_type"):
+                rec.mime_type = mime_type
+            if hasattr(rec, "checksum"):
+                rec.checksum = checksum
+
+            repo.add(rec)
+            session.commit()
+            session.refresh(rec)
+            logger.info("Created recording %s (checksum=%s)", rec.id, checksum)
+            return rec
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()

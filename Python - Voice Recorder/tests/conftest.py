@@ -1,0 +1,35 @@
+import shutil
+import tempfile
+import pytest
+from pathlib import Path
+from models.database import Base, engine, SessionLocal
+
+
+@pytest.fixture(scope="function")
+def tmp_recordings_dir(tmp_path):
+    d = tmp_path / "recordings" / "raw"
+    d.mkdir(parents=True)
+    orig = Path("recordings/raw")
+    # move aside if exists
+    moved = False
+    if orig.exists():
+        backup = tmp_path / "orig_recordings"
+        shutil.move(str(orig), str(backup))
+        moved = True
+    # symlink not reliable on Windows; instead set env or monkeypatch RECORDINGS_DIR in service tests
+    yield d
+    # cleanup
+    if orig.exists():
+        shutil.rmtree(str(orig), ignore_errors=True)
+    if moved:
+        shutil.move(str(backup), str(orig))
+
+
+@pytest.fixture(scope="function")
+def temp_db_file(tmp_path):
+    db_file = tmp_path / "test.db"
+    url = f"sqlite:///{db_file}"
+    # monkeypatch engine? For simplicity tests will rely on in-memory DB setup externally
+    Base.metadata.create_all(bind=engine)
+    yield db_file
+    Base.metadata.drop_all(bind=engine)
