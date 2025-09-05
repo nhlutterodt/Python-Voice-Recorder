@@ -3,6 +3,9 @@
 
 import sys
 from PySide6.QtWidgets import QApplication
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 from audio_recorder import AudioRecorderManager
 import sounddevice as sd
 import time

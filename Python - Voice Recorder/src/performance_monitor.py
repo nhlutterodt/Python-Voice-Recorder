@@ -9,6 +9,10 @@ from contextlib import contextmanager
 from typing import Dict, Any, List
 from dataclasses import dataclass
 
+from core.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 @dataclass
 class PerformanceMetric:
@@ -51,6 +55,14 @@ class PerformanceBenchmark:
             )
             
             self.metrics.append(metric)
+            
+            # Log performance metrics for slow operations (> 1 second)
+            if metric.duration > 1.0:
+                logger.warning(f"Slow operation detected: {operation_name} took {metric.duration:.2f}s")
+            elif metric.duration > 0.5:
+                logger.info(f"Performance: {operation_name} completed in {metric.duration:.2f}s")
+            else:
+                logger.debug(f"Performance: {operation_name} completed in {metric.duration:.3f}s")
     
     def add_manual_metric(self, operation_name: str, duration: float, memory_delta: int = 0, **additional_data):
         """Manually add a performance metric"""

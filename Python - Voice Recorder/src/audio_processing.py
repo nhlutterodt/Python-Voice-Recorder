@@ -8,6 +8,10 @@ import wave
 import os
 import time
 from typing import Optional, cast
+from core.logging_config import get_logger
+
+# Setup logging for this module
+logger = get_logger(__name__)
 
 
 class AudioLoaderThread(QThread):
