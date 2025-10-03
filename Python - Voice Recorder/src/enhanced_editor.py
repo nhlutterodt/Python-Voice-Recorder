@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLineEdit, QMessageBox,
     QProgressBar, QTabWidget
 )
-from src.waveform_viewer import WaveformViewer
+from waveform_viewer import WaveformViewer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QCloseEvent
@@ -795,17 +795,19 @@ class EnhancedAudioEditor(QWidget):
     def save_recording_metadata(self, file_path: str, duration: float):
         """Save recording metadata to database"""
         try:
+            filename = os.path.basename(file_path)
             with SessionLocal() as db:
                 recording = Recording(
-                    filename=os.path.basename(file_path),
+                    filename=filename,
+                    stored_filename=filename,  # Fix: Add the required stored_filename
                     duration=duration,
                     status="active"
                 )
                 db.add(recording)
                 db.commit()
-                print(f"Saved recording metadata: {recording.filename}")
+                print(f"✅ Saved recording metadata: {recording.filename}")
         except Exception as e:
-            print(f"Failed to save recording metadata: {e}")
+            print(f"❌ Failed to save recording metadata: {e}")
 
     def load_recorded_file(self, file_path: str) -> None:
         """Automatically load recorded file for editing"""

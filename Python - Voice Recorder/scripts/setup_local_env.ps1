@@ -84,6 +84,24 @@ if (Test-Path $initScript) {
     Write-Host "init_db.py not found at $initScript"
 }
 
-Write-Host "Setup complete. To run the app:"
-Write-Host "  .\venv\Scripts\Activate.ps1"
-Write-Host "  python \"$ProjectSubdir\enhanced_main.py\""
+Write-Host ""
+Write-Host "🎉 Setup complete!" -ForegroundColor Green
+Write-Host "==================" -ForegroundColor Green
+Write-Host ""
+Write-Host "🚀 To launch Voice Recorder Pro:" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Option 1 - Quick Launch (Recommended):" -ForegroundColor Cyan
+Write-Host "  cd \"$ProjectSubdir\"" -ForegroundColor White
+Write-Host "  .\Launch_VoiceRecorderPro.ps1 -Dev" -ForegroundColor White
+Write-Host ""
+Write-Host "Option 2 - Manual Launch:" -ForegroundColor Cyan
+Write-Host "  .\venv\Scripts\Activate.ps1" -ForegroundColor White
+Write-Host "  cd \"$ProjectSubdir\"" -ForegroundColor White
+Write-Host "  `$env:PYTHONPATH = \".\"" -ForegroundColor White
+Write-Host "  python src\enhanced_main.py" -ForegroundColor White
+Write-Host ""
+Write-Host "Option 3 - Batch File (Windows):" -ForegroundColor Cyan
+Write-Host "  cd \"$ProjectSubdir\"" -ForegroundColor White
+Write-Host "  .\Launch_VoiceRecorderPro.bat -dev" -ForegroundColor White
+Write-Host ""
+Write-Host "💡 The key is setting PYTHONPATH=. and running from the project directory!" -ForegroundColor Yellow

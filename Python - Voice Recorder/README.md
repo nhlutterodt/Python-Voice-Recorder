@@ -77,12 +77,30 @@ powershell -ExecutionPolicy Bypass -File ".\Python - Voice Recorder\scripts\setu
 - It will create a `venv` if none exists, upgrade pip, install packages from `Python - Voice Recorder/requirements.txt`, and initialize the database tables.
 - The script also writes a `.env.template` (if requested) so you can copy it to `.env` and customize local settings.
 
-2. Activate the virtual environment and run the app:
+2. Launch the application using one of these methods:
 
+**🚀 Quick Launch (Recommended):**
 ```powershell
-.\venv\Scripts\Activate.ps1
-python ".\Python - Voice Recorder\enhanced_main.py"
+cd ".\Python - Voice Recorder"
+.\Launch_VoiceRecorderPro.ps1 -Dev
 ```
+
+**Alternative Methods:**
+```powershell
+# Batch file (Windows)
+.\Launch_VoiceRecorderPro.bat -dev
+
+# Manual launch
+.\venv\Scripts\Activate.ps1
+cd ".\Python - Voice Recorder"
+$env:PYTHONPATH = "."
+python src\enhanced_main.py
+```
+
+**🔑 Key Requirements for Manual Launch:**
+- Must run from `Python - Voice Recorder` directory
+- Must set `PYTHONPATH=.` (current directory)
+- Must use Python from the virtual environment
 
 Configuration notes:
 - You can override any app path or setting via environment variables (see `config_manager.py`). The most important is `DATABASE_URL` (for example `sqlite:///db/app.db` or a full absolute sqlite path). If you set a relative sqlite URL, it will be resolved against the project root and the parent directory will be created automatically.
