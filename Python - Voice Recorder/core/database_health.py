@@ -30,6 +30,14 @@ class HealthCheckSeverity(Enum):
     CRITICAL = "critical"
 
 
+class HealthCheckStatus(Enum):
+    """Compatibility enum for tests and older code that expect status values."""
+    PASS = "pass"
+    WARNING = "warning"
+    FAIL = "fail"
+    ERROR = "error"
+
+
 @dataclass
 class HealthCheckResult:
     """Structured health check result"""

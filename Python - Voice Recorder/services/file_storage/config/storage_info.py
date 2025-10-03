@@ -258,3 +258,16 @@ def check_space_for_file(path: str, file_size_mb: float) -> bool:
     storage_info = StorageInfo(path)
     result = storage_info.check_space_available(file_size_mb)
     return result.get('sufficient_space', False)
+
+
+# Backwards compatibility: some tests and code expect older API names and a StorageMetrics class
+try:
+    # Import the legacy module if present and expose expected names
+    from .storage_info_old import StorageInfoCollector as _LegacyCollector, StorageMetrics as _LegacyMetrics  # type: ignore
+
+    # If legacy implementations exist, prefer them for feature-complete behavior
+    StorageInfoCollector = _LegacyCollector  # type: ignore
+    StorageMetrics = _LegacyMetrics  # type: ignore
+except Exception:
+    # If legacy module missing or import fails, keep above defaults
+    pass
