@@ -25,7 +25,7 @@ class FallbackEnvironmentConfig:
     retention_days: int
     enable_compression: bool
 
-class TestStorageConfig:
+class StorageConfigHelper:
     """
     Minimal StorageConfig implementation for testing Phase 1 fixes
     """
@@ -152,14 +152,14 @@ if __name__ == "__main__":
     try:
         # Test 1: Basic initialization
         print("\n📝 Test 1: Basic Initialization")
-        config = TestStorageConfig()
+        config = StorageConfigHelper()
         print(f"   Base path: {config.base_path}")
         print(f"   Environment: {config.environment}")
         
         # Test 2: Different environments
         print("\n📝 Test 2: Different Environments")
         for env in ['development', 'testing', 'production']:
-            test_config = TestStorageConfig(environment=env)
+            test_config = StorageConfigHelper(environment=env)
             print(f"   {env}: {test_config.base_path}")
         
         # Test 3: Configuration summary
