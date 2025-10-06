@@ -101,6 +101,15 @@ class StorageInfo:
             Same as get_storage_info() - provided for interface compatibility.
         """
         return self.get_storage_info()
+
+    # Backwards-compatible alias for older code/tests
+    def get_disk_usage(self) -> Dict[str, Any]:
+        """Alias returning the same shape as older StorageInfoCollector.get_disk_usage"""
+        return self.get_storage_info()
+
+    def get_raw_storage_info(self) -> Dict[str, Any]:
+        """Alias to support older callers expecting get_raw_storage_info"""
+        return self.get_storage_info()
     
     def check_space_available(self, required_mb: float) -> Dict[str, Any]:
         """

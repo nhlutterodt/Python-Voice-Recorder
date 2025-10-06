@@ -176,7 +176,32 @@ class StorageConfig:
         """Setup storage constraints component if available."""
         if self._component_availability.constraints and self._StorageConstraints:
             try:
-                self.constraints = self._StorageConstraints()
+                # Prefer constructing from an EnvironmentConfig when supported
+                env_cfg = self._env_config
+                constructed = False
+                if env_cfg is not None and hasattr(self._StorageConstraints, 'from_environment_config'):
+                    try:
+                        self.constraints = self._StorageConstraints.from_environment_config(env_cfg)
+                        constructed = True
+                    except Exception:
+                        constructed = False
+
+                if not constructed:
+                    try:
+                        # Try to pass the environment config directly
+                        self.constraints = self._StorageConstraints(env_cfg)
+                        constructed = True
+                    except Exception:
+                        constructed = False
+
+                if not constructed:
+                    # Last resort: try no-arg constructor
+                    try:
+                        self.constraints = self._StorageConstraints()
+                        constructed = True
+                    except Exception as e:
+                        raise
+
                 logger.debug("Storage constraints component initialized")
             except Exception as e:
                 logger.warning(f"Failed to initialize constraints component: {e}")
@@ -248,12 +273,132 @@ class StorageConfig:
             except Exception as e:
                 logger.warning(f"Failed to get storage info from component: {e}")
         
-        # Fallback implementation
+        # Fallback implementation (tests expect free_mb/used_mb/total_mb keys)
         return {
-            'total_space': 'unknown',
-            'free_space': 'unknown',
-            'used_space': 'unknown',
+            'total_mb': 0.0,
+            'free_mb': 0.0,
+            'used_mb': 0.0,
             'base_path': str(self.base_path),
+            'source': 'fallback'
+        }
+
+    # Phase 2 enhanced API compatibility wrappers expected by tests
+    @property
+    def path_manager(self):
+        """Expose path manager instance compatible with Phase 2 tests."""
+        if not hasattr(self, '_path_manager') or self._path_manager is None:
+            try:
+                # Create StoragePathManager from environment config if available
+                if self._StoragePathConfig:
+                    cfg = self._StoragePathConfig(
+                        base_path=self.base_path
+                    )
+                    from .path_management import StoragePathManager
+                    self._path_manager = StoragePathManager(cfg)
+                else:
+                    self._path_manager = None
+            except Exception:
+                self._path_manager = None
+        return self._path_manager
+
+    def get_enhanced_path_info(self) -> Dict[str, Any]:
+        """Enhanced path info expected by Phase 2 tests."""
+        pm = self.path_manager
+        if pm:
+            info = pm.get_path_information()
+            # Normalize shape expected by tests
+            out = {
+                'available': True,
+                'enhanced_info': {},
+                'validation_results': {},
+                'supported_types': [],
+            }
+            try:
+                if isinstance(info, dict):
+                    out['enhanced_info'] = info
+                else:
+                    out['enhanced_info'] = {'paths': str(self.base_path)}
+                # Provide supported types
+                out['supported_types'] = getattr(pm, 'supported_types', ['raw', 'edited', 'temp', 'backup'])
+                # Run a permission validation to include validation results if available
+                try:
+                    val = self.validate_path_permissions()
+                    out['validation_results'] = val
+                except Exception:
+                    out['validation_results'] = {'valid': False, 'message': 'validation_failed'}
+            except Exception:
+                out['enhanced_info'] = {'configuration': self.get_configuration_summary()}
+            return out
+        # Indicate enhanced features not available
+        return {'available': False, 'fallback_info': {'base_path': str(self.base_path), 'configuration': self.get_configuration_summary()}}
+
+    def ensure_directories_enhanced(self) -> Dict[str, Any]:
+        pm = self.path_manager
+        if pm:
+            return pm.ensure_directories()
+        # fallback behaviour
+        self.ensure_directories()
+        return {'success': True}
+
+    def get_path_for_type_enhanced(self, path_type: str, filename: Optional[str] = None) -> Dict[str, Any]:
+        pm = self.path_manager
+        out: Dict[str, Any] = {'storage_type': path_type, 'enhanced': False}
+        try:
+            if pm:
+                path = pm.get_path_for_type(path_type)
+                if filename:
+                    path = path / filename
+                out.update({'path': Path(path), 'enhanced': True, 'enhanced_path': Path(path)})
+                # Optionally include validation info
+                try:
+                    out['validation'] = self.validate_path_permissions()
+                except Exception:
+                    out['validation'] = {'valid': False}
+                return out
+            # Fallback to existing method
+            base = self.get_path_for_type(path_type, filename)
+            out.update({'path': base, 'enhanced': False})
+            return out
+        except Exception as e:
+            return {'error': str(e), 'storage_type': path_type, 'enhanced': False}
+
+    def validate_path_permissions(self) -> Dict[str, Any]:
+        """Validate permissions for configured storage paths (Phase 2 API)."""
+        try:
+            from .path_management import PathValidator
+            # Validate base paths via the PathValidator utility
+            results = {}
+            for name, p in self.get_configuration_summary().get('paths', {}).items():
+                if p is None:
+                    results[name] = {'valid': False, 'message': 'Path not configured'}
+                    continue
+                path_obj = Path(p)
+                valid, perms, message = PathValidator.validate_path_permissions(path_obj)
+                results[name] = {'valid': valid, 'permissions': perms.get_summary() if perms else None, 'message': message}
+            overall = all(r['valid'] for r in results.values())
+            return {'enhanced': True, 'valid': overall, 'paths_checked': list(results.keys()), 'details': results}
+        except Exception as e:
+            return {'enhanced': False, 'message': str(e)}
+
+    def validate_file_constraints(self, file_path: str) -> Dict[str, Any]:
+        """Expose validate_file_constraints for backward compatibility."""
+        if self.constraints:
+            try:
+                # Some implementations expect constraints to be constructed differently
+                if hasattr(self.constraints, 'validate_file_constraints'):
+                    return self.constraints.validate_file_constraints(file_path)
+                elif hasattr(self.constraints, 'validate_file'):
+                    return self.constraints.validate_file(file_path)
+            except Exception as e:
+                logger.warning(f"Constraints validate_file failed: {e}")
+
+        # Fallback simple validation
+        path_obj = Path(file_path)
+        return {
+            'valid': path_obj.exists(),
+            'errors': [] if path_obj.exists() else ['File does not exist'],
+            'warnings': [],
+            'file_size_mb': path_obj.stat().st_size / (1024*1024) if path_obj.exists() else 0,
             'source': 'fallback'
         }
     

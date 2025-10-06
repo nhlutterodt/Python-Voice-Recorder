@@ -147,6 +147,7 @@ class TestStorageConstraints:
             # Write 1MB of data
             temp_file.write(b'0' * (1024 * 1024))
             temp_file.flush()
+            temp_file.close()
             
             try:
                 result = self.constraints.validate_file_constraints(temp_file.name)
@@ -157,7 +158,10 @@ class TestStorageConstraints:
                 assert result['applied_constraints']['max_file_size_mb'] == 1000
                 
             finally:
-                os.unlink(temp_file.name)
+                try:
+                    os.unlink(temp_file.name)
+                except (PermissionError, FileNotFoundError):
+                    pass
     
     def test_validate_file_constraints_oversized_file(self):
         """Test file constraint validation with oversized file"""
@@ -320,6 +324,7 @@ class TestConstraintValidator:
             # Write 1MB of data
             temp_file.write(b'0' * (1024 * 1024))
             temp_file.flush()
+            temp_file.close()
             
             try:
                 result = self.validator.validate_file_complete(temp_file.name, Path('/tmp'))
@@ -337,7 +342,10 @@ class TestConstraintValidator:
                 assert len(summary['constraints_checked']) == 3
                 
             finally:
-                os.unlink(temp_file.name)
+                try:
+                    os.unlink(temp_file.name)
+                except (PermissionError, FileNotFoundError):
+                    pass
     
     @patch('services.file_storage.config.constraints.StorageInfoCollector')
     def test_validate_before_operation_valid(self, mock_collector_class):
@@ -473,6 +481,7 @@ class TestIntegrationConstraints:
                 # Write 5MB of data
                 temp_file.write(b'0' * (5 * 1024 * 1024))
                 temp_file.flush()
+                temp_file.close()
                 
                 try:
                     # Test file constraints only (disk space checking disabled)
@@ -490,4 +499,7 @@ class TestIntegrationConstraints:
                     assert summary['features']['disk_space_check_enabled'] is False
                     
                 finally:
-                    os.unlink(temp_file.name)
+                    try:
+                        os.unlink(temp_file.name)
+                    except (PermissionError, FileNotFoundError):
+                        pass

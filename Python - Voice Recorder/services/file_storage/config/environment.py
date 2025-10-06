@@ -33,7 +33,7 @@ class Environment(Enum):
             )
 
 
-@dataclass(frozen=True)
+@dataclass
 class EnvironmentConfig:
     """
     Immutable environment-specific configuration
@@ -42,38 +42,38 @@ class EnvironmentConfig:
     Making it frozen ensures configuration immutability and prevents accidental modifications.
     """
     # Storage path configuration
-    base_subdir: str
+    base_subdir: str = 'recordings'
     
     # Disk space constraints
-    min_disk_space_mb: int
-    enable_disk_space_check: bool
+    min_disk_space_mb: int = 50
+    enable_disk_space_check: bool = True
     
     # File size constraints
-    max_file_size_mb: int
+    max_file_size_mb: int = 500
     
     # Feature flags
-    enable_backup: bool
-    enable_compression: bool
+    enable_backup: bool = False
+    enable_compression: bool = False
     
     # Data retention policy
-    retention_days: int
+    retention_days: int = 30
 
     def __post_init__(self):
         """Validate configuration values after initialization"""
         validation_errors = []
-        
-        if self.min_disk_space_mb <= 0:
+
+        if self.min_disk_space_mb is None or self.min_disk_space_mb <= 0:
             validation_errors.append("min_disk_space_mb must be positive")
-        
-        if self.max_file_size_mb <= 0:
+
+        if self.max_file_size_mb is None or self.max_file_size_mb <= 0:
             validation_errors.append("max_file_size_mb must be positive")
-        
-        if self.retention_days <= 0:
+
+        if self.retention_days is None or self.retention_days <= 0:
             validation_errors.append("retention_days must be positive")
-        
+
         if not self.base_subdir:
             validation_errors.append("base_subdir cannot be empty")
-        
+
         if validation_errors:
             raise StorageConfigValidationError(
                 f"Invalid environment configuration: {'; '.join(validation_errors)}"

@@ -237,7 +237,7 @@ class TestPathValidator:
         assert "compatible" in message.lower()
     
     @patch('platform.system', return_value='Windows')
-    def test_validate_cross_platform_path_windows_invalid_chars(self):
+    def test_validate_cross_platform_path_windows_invalid_chars(self, _mock_system):
         """Test cross-platform validation with Windows invalid characters"""
         path = Path("invalid<path>with:bad|chars")
         valid, message = PathValidator.validate_cross_platform_path(path)
@@ -245,7 +245,7 @@ class TestPathValidator:
         assert "invalid Windows character" in message
     
     @patch('platform.system', return_value='Windows')
-    def test_validate_cross_platform_path_windows_reserved_names(self):
+    def test_validate_cross_platform_path_windows_reserved_names(self, _mock_system):
         """Test cross-platform validation with Windows reserved names"""
         path = Path("some/CON/path")
         valid, message = PathValidator.validate_cross_platform_path(path)

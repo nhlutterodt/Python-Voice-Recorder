@@ -28,6 +28,9 @@ from core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# Module-level placeholder so tests or other modules can patch/import db_context
+db_context = None
+
 
 @dataclass
 class DatabaseConfig:
@@ -35,7 +38,7 @@ class DatabaseConfig:
     connection_timeout: int = 30
     query_timeout: int = 60
     max_retries: int = 3
-    retry_delay: float = 0.5
+    retry_delay: float = 1.0
     min_disk_space_mb: int = 100
     disk_space_threshold_mb: int = 100
     circuit_breaker_threshold: int = 5
@@ -113,8 +116,9 @@ class DatabaseContextManager:
             raise DatabaseCircuitBreakerError("Database circuit breaker is open - too many recent failures")
         
         # Check disk space if requested (skip for read-only operations)
-        if check_disk_space and not readonly and not self._check_disk_space():
-            raise DatabaseDiskSpaceError("Insufficient disk space for database operations")
+        if check_disk_space and not readonly:
+            # _check_disk_space will raise DatabaseDiskSpaceError when insufficient
+            self._check_disk_space()
         
         session = None
         retry_count = 0
@@ -269,25 +273,46 @@ class DatabaseContextManager:
             }
     
     def _check_disk_space(self) -> bool:
-        """Check available disk space before write operations"""
+        """Check available disk space before write operations.
+
+        Raises DatabaseDiskSpaceError when available space is below the configured minimum.
+        Returns True when sufficient.
+        """
+        if not getattr(self.config, 'enable_disk_space_check', True):
+            return True
+
         try:
             # Get database directory
             db_path = Path("db").resolve()
             if not db_path.exists():
                 db_path = Path.cwd()
-            
-            usage = shutil.disk_usage(db_path)
+
+            # Prefer psutil.disk_usage so tests can patch psutil.disk_usage
+            try:
+                usage = psutil.disk_usage(str(db_path))
+            except Exception:
+                usage = shutil.disk_usage(str(db_path))
+
             available_mb = usage.free / (1024 * 1024)
-            
-            is_sufficient = available_mb > self.config.disk_space_threshold_mb
-            
-            if not is_sufficient:
-                logger.warning(f"Low disk space: {available_mb:.1f}MB available, threshold: {self.config.disk_space_threshold_mb}MB")
-            
-            return is_sufficient
+
+            # Use min_disk_space_mb as the threshold tests expect
+            required_mb = getattr(self.config, 'min_disk_space_mb', self.config.disk_space_threshold_mb)
+
+            if available_mb < required_mb:
+                logger.warning(f"Low disk space: {available_mb:.1f}MB available, threshold: {required_mb}MB")
+                raise DatabaseDiskSpaceError(
+                    f"Insufficient disk space: {available_mb:.1f} MB available",
+                    required_mb=required_mb,
+                    available_mb=round(available_mb, 1)
+                )
+
+            return True
+        except DatabaseDiskSpaceError:
+            raise
         except Exception as e:
             logger.warning(f"Could not check disk space: {e}")
-            return True  # Assume OK if can't check
+            # If we can't determine disk space, be permissive
+            return True
     
     def _is_circuit_breaker_open(self) -> bool:
         """Check if circuit breaker should prevent operations"""
@@ -390,32 +415,57 @@ class DatabaseContextManager:
 
 class DatabaseConnectionError(Exception):
     """Raised when database connection cannot be established"""
-    pass
+    def __init__(self, message: str = "Database connection error", original_exception: Optional[Exception] = None, **kwargs: Any):
+        super().__init__(message)
+        self.original_exception = original_exception
+        # Expose any extra keyword args as attributes for tests
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 class DatabaseTransactionError(Exception):
     """Raised when database transaction fails"""
-    pass
+    def __init__(self, message: str = "Database transaction error", original_exception: Optional[Exception] = None, **kwargs: Any):
+        super().__init__(message)
+        self.original_exception = original_exception
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 class DatabaseIntegrityError(Exception):
     """Raised when database integrity constraints are violated"""
-    pass
+    def __init__(self, message: str = "Database integrity error", original_exception: Optional[Exception] = None, **kwargs: Any):
+        super().__init__(message)
+        self.original_exception = original_exception
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 class DatabaseTimeoutError(Exception):
     """Raised when database operations timeout"""
-    pass
+    def __init__(self, message: str = "Database timeout", original_exception: Optional[Exception] = None, **kwargs: Any):
+        super().__init__(message)
+        self.original_exception = original_exception
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 class DatabaseCircuitBreakerError(Exception):
     """Raised when circuit breaker prevents database operations"""
-    pass
+    def __init__(self, message: str = "Circuit breaker open", original_exception: Optional[Exception] = None, **kwargs: Any):
+        super().__init__(message)
+        self.original_exception = original_exception
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 class DatabaseDiskSpaceError(Exception):
     """Raised when insufficient disk space for database operations"""
-    pass
+    def __init__(self, message: str = "Insufficient disk space", original_exception: Optional[Exception] = None, **kwargs: Any):
+        super().__init__(message)
+        self.original_exception = original_exception
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 # Connection configuration for enhanced performance
