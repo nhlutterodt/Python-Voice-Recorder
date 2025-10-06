@@ -284,30 +284,31 @@ class EnhancedAudioEditor(QWidget):
         self.audio_level = QLabel(UIConstants.AUDIO_LEVEL_EMPTY)
         self.audio_level.setStyleSheet("color: #7f8c8d; font-size: 10px;")
         
-    record_layout.addWidget(self.record_button)
+        record_layout.addWidget(self.record_button)
         record_layout.addWidget(QLabel("Duration:"))
         record_layout.addWidget(self.recording_duration)
         record_layout.addWidget(self.audio_level)
         record_layout.addStretch()
-        
+
         layout.addWidget(record_label)
         layout.addWidget(self.recording_status)
         layout.addLayout(record_layout)
-    # Device selection row
-    device_layout = QHBoxLayout()
-    device_layout.addWidget(QLabel("Input Device:"))
-    self.device_selector = QComboBox()
-    self.device_selector.setEditable(False)
-    self.device_selector.currentIndexChanged.connect(self.on_device_selected)
-    device_layout.addWidget(self.device_selector)
 
-    self.refresh_devices_btn = QPushButton("Refresh Devices")
-    self.refresh_devices_btn.clicked.connect(self.populate_device_list)
-    device_layout.addWidget(self.refresh_devices_btn)
-    device_layout.addStretch()
+        # Device selection row
+        device_layout = QHBoxLayout()
+        device_layout.addWidget(QLabel("Input Device:"))
+        self.device_selector = QComboBox()
+        self.device_selector.setEditable(False)
+        self.device_selector.currentIndexChanged.connect(self.on_device_selected)
+        device_layout.addWidget(self.device_selector)
 
-    layout.addLayout(device_layout)
-        
+        self.refresh_devices_btn = QPushButton("Refresh Devices")
+        self.refresh_devices_btn.clicked.connect(self.populate_device_list)
+        device_layout.addWidget(self.refresh_devices_btn)
+        device_layout.addStretch()
+
+        layout.addLayout(device_layout)
+
         section.setLayout(layout)
         return section
 

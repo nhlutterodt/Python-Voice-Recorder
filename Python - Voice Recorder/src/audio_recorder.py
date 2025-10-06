@@ -38,6 +38,9 @@ class AudioRecorderThread(QThread):
         self.audio_data: List[NDArray[np.float32]] = []  # Properly typed audio data list
         self.start_time = 0.0
         self.frames_recorded = 0
+        # Internal flag set when a callback-level error occurred; used to
+        # prevent finalizing partial files into final recordings.
+        self._recording_failed = False
     
     def run(self):
         """Record audio in background thread with progress monitoring.
@@ -122,7 +125,19 @@ class AudioRecorderThread(QThread):
                 current_duration = float(self.frames_recorded) / float(self.sample_rate)
                 self.recording_progress.emit(current_duration, audio_level)
             except Exception:
+                # Record and surface callback-level errors. We set a flag so
+                # the finalizer knows not to promote the .part file to final
+                # and emit a recording_error so callers can react.
                 logger.exception("Error in audio callback")
+                self._recording_failed = True
+                try:
+                    self.recording_error.emit(f"Recording callback error: {traceback.format_exc()}")
+                except Exception:
+                    # Emitting signals from a non-Qt thread may fail; swallow
+                    # to avoid secondary errors while still marking failure.
+                    logger.debug("Could not emit recording_error from audio callback")
+                # Stop recording cooperatively
+                self.is_recording = False
 
         return audio_callback
 
@@ -145,6 +160,22 @@ class AudioRecorderThread(QThread):
         Emits recording_completed on success and recording_error on failure.
         """
         try:
+            # If a callback-level error occurred, remove the temporary file and
+            # skip promoting it to the final file.
+            if getattr(self, '_recording_failed', False):
+                try:
+                    with wav_lock:
+                        try:
+                            wav_file.close()
+                        except Exception:
+                            logger.exception("Error closing wav file after callback failure")
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                except Exception:
+                    logger.exception("Failed to cleanup temporary recording after callback failure")
+                # recording_error was already emitted by the callback; return.
+                return
+
             with wav_lock:
                 try:
                     wav_file.close()
@@ -162,7 +193,10 @@ class AudioRecorderThread(QThread):
                     os.remove(tmp_path)
             except Exception:
                 logger.exception("Failed to remove temporary recording file")
-            self.recording_error.emit(f"Failed to save recording: {e}")
+            try:
+                self.recording_error.emit(f"Failed to save recording: {e}")
+            except Exception:
+                logger.debug("Could not emit recording_error from finalizer")
     
     def stop_recording(self):
         """Stop the recording process"""

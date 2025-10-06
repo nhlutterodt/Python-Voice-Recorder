@@ -10,6 +10,11 @@ from pathlib import Path
 import logging
 
 from .environment import EnvironmentConfig
+# Export EnvironmentManager at module level so tests can patch
+try:
+    from .environment import EnvironmentManager  # type: ignore
+except Exception:
+    EnvironmentManager = None
 # Export StorageInfoCollector symbol here to allow tests to patch it via the constraints module
 try:
     from .storage_info import StorageInfoCollector  # type: ignore

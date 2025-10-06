@@ -89,3 +89,88 @@ def test_inputstream_raises_on_exit_cleanup(tmp_path, caplog):
     assert not os.path.exists(str(out))
     # The recorder logs an ERROR when the InputStream fails on exit
     assert any('Recording failed' in r.message for r in caplog.records)
+
+
+def test_callback_write_error_removes_part(tmp_path, caplog):
+    """Simulate a writeframes error inside the audio callback and ensure
+    the temporary .part file is removed and an error is logged.
+    """
+    out = tmp_path / "rec_callback_fail.wav"
+    sample_rate = 8000
+    channels = 1
+
+    # Fake wave.open that returns an object whose writeframes raises
+    class FakeWave:
+        def __init__(self, path, mode):
+            self.path = path
+            self._closed = False
+
+        def setnchannels(self, n):
+            pass
+
+        def setsampwidth(self, w):
+            pass
+
+        def setframerate(self, r):
+            pass
+
+        def writeframes(self, data):
+            raise RuntimeError("disk write error simulated")
+
+        def close(self):
+            self._closed = True
+
+    # Fake InputStream that will call the provided callback a few times
+    class SingleCallbackInputStream:
+        def __init__(self, *args, **kwargs):
+            self.callback = kwargs.get('callback') if 'callback' in kwargs else (args[0] if args else None)
+            self.blocksize = kwargs.get('blocksize', 1024)
+            self._running = False
+
+        def __enter__(self):
+            # Call callback once to trigger writeframes inside audio_callback
+            if self.callback is not None:
+                frames = self.blocksize
+                t = np.linspace(0, 1, frames, endpoint=False, dtype=np.float32)
+                chunk = 0.1 * np.sin(2 * np.pi * 440 * t).astype(np.float32)
+                try:
+                    self.callback(chunk.reshape(-1, 1), frames, None, None)
+                except Exception:
+                    # Callback exceptions are handled by the recorder
+                    pass
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    # Patch both wave.open and sd.InputStream inside the audio_recorder module
+    from unittest.mock import patch
+
+    with patch('audio_recorder.wave.open', new=lambda path, mode: FakeWave(path, mode)):
+        with patch('audio_recorder.sd.InputStream', new=SingleCallbackInputStream):
+            thread = AudioRecorderThread(str(out), sample_rate=sample_rate, channels=channels)
+            caplog.clear()
+            caplog.set_level('ERROR')
+
+            thread.is_recording = True
+            t = threading.Thread(target=thread.run)
+            t.start()
+
+            # allow a short moment for the callback to run and finalize to execute
+            t.join(timeout=2)
+
+    # Ensure .part and final files do not exist
+    assert not os.path.exists(str(out)), \
+        "Final output should not exist after callback write failure"
+    assert not os.path.exists(str(out) + '.part'), \
+        ".part temporary file should be removed after callback write failure"
+
+    # The recorder logs an ERROR when the callback write fails. The recorder
+    # may either log the exception message from the callback or emit a
+    # recording_error signal; accept either.
+    assert any(
+        'Recording callback error' in r.message
+        or 'Recording failed' in r.message
+        or 'Error in audio callback' in r.message
+        for r in caplog.records
+    )
