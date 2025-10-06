@@ -107,6 +107,11 @@ assert service.health_monitor is not None
 
 ---
 
+### Constraints Module Refactor (Sept 2025)
+
+We performed a targeted refactor of `services.file_storage.config.constraints` to centralize collector probing, normalize storage info shapes, and add small helpers to make behavior deterministic and easier to test. See `docs/CONSTRAINTS_REFACTOR.md` for details and test commands.
+
+
 #### **Task 1.2: Define Storage Configuration Classes**
 **Priority**: High | **Estimated Time**: 1.5 hours | **Status**: ⏸️ Pending
 

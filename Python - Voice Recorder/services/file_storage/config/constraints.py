@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 from pathlib import Path
+import logging
 
 from ..exceptions import StorageConfigValidationError
 from .environment import EnvironmentConfig, EnvironmentManager
@@ -15,6 +16,9 @@ try:
     from .storage_info import StorageInfoCollector  # type: ignore
 except Exception:
     StorageInfoCollector = None
+
+# module logger
+logger = logging.getLogger(__name__)
 
 
 def _get_candidate_collectors() -> list:
@@ -368,6 +372,98 @@ def _normalize_storage_info(si) -> Dict[str, float]:
         return {'free_mb': 0.0, 'used_mb': 0.0, 'total_mb': 0.0}
 
 
+def _resolve_probe_and_normalize(base_path: Path):
+    """Resolve candidate collectors for base_path, probe them and return
+    a tuple (normalized_dict, chosen_meta, raw_storage_info).
+
+    chosen_meta is (cls, method_name) or None when no candidate found.
+    """
+    candidate_collectors = _get_candidate_collectors()
+    if not candidate_collectors:
+        return {'free_mb': 0.0, 'used_mb': 0.0, 'total_mb': 0.0}, None, None
+    candidate_results = _probe_candidate_collectors(candidate_collectors, base_path)
+    chosen = _select_candidate(candidate_results)
+    if not chosen:
+        return {'free_mb': 0.0, 'used_mb': 0.0, 'total_mb': 0.0}, None, None
+    cls, storage_info, method_name = chosen
+    normalized = _normalize_storage_info(storage_info)
+    return normalized, (cls, method_name), storage_info
+
+
+def _resolve_operation_kwargs(operation_type, estimated_size_mb, kwargs) -> tuple:
+    """Normalize operation_type and estimated_size_mb from legacy kwargs.
+
+    Returns (operation_type, estimated_size_mb_float).
+    """
+    if operation_type is None and 'operation' in kwargs:
+        operation_type = kwargs.get('operation')
+    if estimated_size_mb is None and 'estimated_size_mb' in kwargs:
+        estimated_size_mb = kwargs.get('estimated_size_mb')
+    if estimated_size_mb is None and 'size_mb' in kwargs:
+        estimated_size_mb = kwargs.get('size_mb')
+    if operation_type is None and 'operation_type' in kwargs:
+        operation_type = kwargs.get('operation_type')
+
+    # Backwards compat: keep legacy 'operation' mapping
+    if 'operation' in kwargs and operation_type is None:
+        operation_type = kwargs.get('operation')
+
+    # Default numeric and inference
+    if estimated_size_mb is None:
+        estimated_size_mb = 0.0
+    if estimated_size_mb in (None, 0.0):
+        estimated_size_mb = _infer_estimated_size(estimated_size_mb, kwargs)
+    try:
+        estimated_size_mb = float(estimated_size_mb)
+    except Exception:
+        estimated_size_mb = 0.0
+    return operation_type, estimated_size_mb
+
+
+def _check_estimated_size_limits(estimated_size_mb: float, constraints: 'StorageConstraints') -> tuple:
+    """Return (errors:list, warnings:list) for estimated_size against constraints."""
+    errors = []
+    warnings = []
+    try:
+        if estimated_size_mb > constraints.max_file_size_mb:
+            errors.append(
+                f"Estimated operation size {estimated_size_mb:.1f}MB exceeds "
+                f"maximum file size {constraints.max_file_size_mb}MB"
+            )
+        elif estimated_size_mb > constraints.max_file_size_mb * 0.8:
+            warnings.append(
+                f"Estimated operation size {estimated_size_mb:.1f}MB is approaching "
+                f"maximum file size {constraints.max_file_size_mb}MB"
+            )
+    except Exception:
+        # On any error, treat as no additional messages
+        pass
+    return errors, warnings
+
+
+def _gather_operation_recommendations(operation_type: Optional[str], estimated_size_mb: float) -> List[str]:
+    """Return small list of human-friendly recommendations for given operation."""
+    recs: List[str] = []
+    if operation_type in ['write', 'copy']:
+        if estimated_size_mb > 100:
+            recs.append('Consider using compression for large files')
+    return recs
+
+
+def _perform_source_file_validation(src_path: Optional[str], constraints: 'StorageConstraints'):
+    """Wrapper helper that safely validates a source file and returns the src_check dict or None."""
+    return _maybe_validate_source_file(src_path, constraints)
+
+
+def _perform_capacity_preop_check(constraints: 'StorageConstraints', base_path: Path, estimated_size_mb: float):
+    """Wrapper around _evaluate_capacity_for_operation returning its tuple directly.
+
+    Kept as a separate helper to centralize pre-op capacity evaluation and to
+    make unit testing and linter-friendly extraction easier.
+    """
+    return _evaluate_capacity_for_operation(constraints, base_path, estimated_size_mb)
+
+
 def _is_valid_storage_info(si) -> bool:
     """Return True if the object/dict looks like storage info with numeric metrics.
 
@@ -573,25 +669,13 @@ class StorageConstraints:
             validation_result['required_space_mb'] = required_space_mb
 
             # Use helper utilities to locate and probe candidate collectors
-            candidate_collectors = _get_candidate_collectors()
-            if not candidate_collectors:
-                raise RuntimeError('No StorageInfoCollector available for disk checks')
-
-            candidate_results = _probe_candidate_collectors(candidate_collectors, base_path)
-            chosen = _select_candidate(candidate_results)
-
-            storage_info = None
-            chosen_method = None
-            if chosen is not None:
-                cls, storage_info, chosen_method = chosen
+            normalized, chosen_meta, storage_info = _resolve_probe_and_normalize(base_path)
+            if chosen_meta is not None:
                 try:
                     if os.environ.get('DEBUG_CONSTRAINTS'):
-                        print(f"DEBUG_CONSTRAINTS: chosen_collector={repr(cls)}, method={chosen_method}")
+                        print(f"DEBUG_CONSTRAINTS: chosen_collector={repr(chosen_meta[0])}, method={chosen_meta[1]}")
                 except Exception:
                     pass
-
-            # Normalize available/used/total values into MB regardless of shape
-            normalized = _normalize_storage_info(storage_info)
             try:
                 if os.environ.get('DEBUG_CONSTRAINTS'):
                     print('DEBUG_CONSTRAINTS: storage_info=', storage_info)
@@ -658,25 +742,13 @@ class StorageConstraints:
         
         try:
             # Use helper utilities to locate and probe candidate collectors
-            candidate_collectors = _get_candidate_collectors()
-            if not candidate_collectors:
-                raise RuntimeError('No StorageInfoCollector available for capacity checks')
-
-            candidate_results = _probe_candidate_collectors(candidate_collectors, base_path)
-            chosen = _select_candidate(candidate_results)
-
-            storage_info = None
-            chosen_method = None
-            if chosen is not None:
-                cls, storage_info, chosen_method = chosen
+            normalized, chosen_meta, storage_info = _resolve_probe_and_normalize(base_path)
+            if chosen_meta is not None:
                 try:
                     if os.environ.get('DEBUG_CONSTRAINTS'):
-                        print(f"DEBUG_CONSTRAINTS capacity: chosen_collector={repr(cls)}, method={chosen_method}")
+                        print(f"DEBUG_CONSTRAINTS capacity: chosen_collector={repr(chosen_meta[0])}, method={chosen_meta[1]}")
                 except Exception:
                     pass
-
-            # Normalize the returned shape and expose normalized capacity_info
-            normalized = _normalize_storage_info(storage_info)
             try:
                 if os.environ.get('DEBUG_CONSTRAINTS'):
                     print('DEBUG_CONSTRAINTS capacity: storage_info=', storage_info)
@@ -866,26 +938,39 @@ class ConstraintValidator:
         }
         
         try:
-            # Accept legacy kwargs mapping
-            if operation_type is None and 'operation' in kwargs:
-                operation_type = kwargs.get('operation')
-            if estimated_size_mb is None and 'estimated_size_mb' in kwargs:
-                estimated_size_mb = kwargs.get('estimated_size_mb')
-            if estimated_size_mb is None and 'size_mb' in kwargs:
-                estimated_size_mb = kwargs.get('size_mb')
-            if operation_type is None and 'operation_type' in kwargs:
-                operation_type = kwargs.get('operation_type')
+            # Normalize operation and estimated size from positional args and legacy kwargs
+            def _resolve_operation_kwargs(operation_type, estimated_size_mb, kwargs):
+                """Normalize operation_type and estimated_size_mb from legacy kwargs.
 
-            # Keep legacy 'operation' key when tests pass 'operation' in kwargs
-            if 'operation' in kwargs and operation_type is None:
-                operation_type = kwargs.get('operation')
+                This helper accepts the possibly-None values passed in and the kwargs
+                dict and returns a tuple (operation_type, estimated_size_mb) where
+                estimated_size_mb is a float and operation_type may be None or a str.
+                """
+                if operation_type is None and 'operation' in kwargs:
+                    operation_type = kwargs.get('operation')
+                if estimated_size_mb is None and 'estimated_size_mb' in kwargs:
+                    estimated_size_mb = kwargs.get('estimated_size_mb')
+                if estimated_size_mb is None and 'size_mb' in kwargs:
+                    estimated_size_mb = kwargs.get('size_mb')
+                if operation_type is None and 'operation_type' in kwargs:
+                    operation_type = kwargs.get('operation_type')
 
-            if estimated_size_mb is None:
-                estimated_size_mb = 0.0
+                # Backwards compat: keep legacy 'operation' mapping
+                if 'operation' in kwargs and operation_type is None:
+                    operation_type = kwargs.get('operation')
 
-            # Infer estimated size from kwargs (source file) when not provided
-            if estimated_size_mb in (None, 0.0):
-                estimated_size_mb = _infer_estimated_size(estimated_size_mb, kwargs)
+                # Default numeric and inference
+                if estimated_size_mb is None:
+                    estimated_size_mb = 0.0
+                if estimated_size_mb in (None, 0.0):
+                    estimated_size_mb = _infer_estimated_size(estimated_size_mb, kwargs)
+                try:
+                    estimated_size_mb = float(estimated_size_mb)
+                except Exception:
+                    estimated_size_mb = 0.0
+                return operation_type, estimated_size_mb
+
+            operation_type, estimated_size_mb = _resolve_operation_kwargs(operation_type, estimated_size_mb, kwargs)
 
             # Reflect mapped values in the result for test assertions
             validation_result['estimated_size_mb'] = estimated_size_mb
@@ -893,87 +978,51 @@ class ConstraintValidator:
             # Keep backward-compatible 'operation' key set to the resolved name
             validation_result['operation'] = operation_type
 
-            # Check if estimated size exceeds file size limits
-            if estimated_size_mb > self.constraints.max_file_size_mb:
+            # Check estimated size limits via helper
+            size_errors, size_warnings = _check_estimated_size_limits(estimated_size_mb, self.constraints)
+            if size_errors:
                 validation_result['valid'] = False
-                validation_result['errors'].append(
-                    f"Estimated operation size {estimated_size_mb:.1f}MB exceeds "
-                    f"maximum file size {self.constraints.max_file_size_mb}MB"
-                )
-            elif estimated_size_mb > self.constraints.max_file_size_mb * 0.8:
-                validation_result['warnings'].append(
-                    f"Estimated operation size {estimated_size_mb:.1f}MB is approaching "
-                    f"maximum file size {self.constraints.max_file_size_mb}MB"
-                )
+                validation_result['errors'].extend(size_errors)
+            validation_result['warnings'].extend(size_warnings)
             
             # Source file validation (if a source path provided)
+            # Source file validation
             src_path = None
             for key in ('source_file_path', 'source', 'source_path'):
                 if key in kwargs:
                     src_path = kwargs.get(key)
                     break
             if src_path:
-                try:
-                    src_check = self.constraints.validate_file_constraints(src_path)
-                    validation_result['source_file_validation'] = src_check
+                src_check = _perform_source_file_validation(src_path, self.constraints)
+                validation_result['source_file_validation'] = src_check
+                if src_check is not None:
                     if not src_check.get('valid', False):
                         validation_result['valid'] = False
                         validation_result['errors'].extend(src_check.get('errors', []))
                     validation_result['warnings'].extend(src_check.get('warnings', []))
-                except Exception as e:
-                    validation_result['source_file_validation'] = {'valid': False, 'errors': [str(e)]}
-                    validation_result['valid'] = False
 
             # Check storage capacity for the operation (disk space)
             if self.constraints.enable_disk_space_check:
-                # Prefer checking overall capacity first, then specific disk-for-file if needed
-                capacity_result = self.constraints.validate_storage_capacity(base_path)
-                validation_result['disk_space_validation'] = capacity_result
-                if capacity_result.get('valid'):
-                    available_mb = capacity_result['capacity_info'].get('free_mb', 0.0)
-                    required_mb = estimated_size_mb + self.constraints.min_disk_space_mb
-                    if available_mb < required_mb:
-                        validation_result['valid'] = False
-                        validation_result['errors'].append(
-                            f"Insufficient space for operation: {available_mb:.1f}MB available, "
-                            f"{required_mb:.1f}MB required"
-                        )
-                    elif available_mb < required_mb * 1.5:
-                        validation_result['warnings'].append(
-                            f"Limited space for operation: {available_mb:.1f}MB available"
-                        )
-                        validation_result['recommendations'].append(
-                            "Consider cleaning up old files before proceeding"
-                        )
-                else:
-                    # Debug: surface capacity_result when it's invalid so tests can show why
-                    try:
-                        if os.environ.get('DEBUG_CONSTRAINTS'):
-                            print('DEBUG_CONSTRAINTS: capacity_result_invalid=', capacity_result)
-                    except Exception:
-                        pass
-                    validation_result['warnings'].extend(capacity_result.get('errors', []))
+                # Use centralized evaluator that returns (valid, errors, warnings, recommendations, disk_space_validation)
+                cap_valid, cap_errors, cap_warnings, cap_recs, disk_space_validation = _perform_capacity_preop_check(
+                    self.constraints, base_path, estimated_size_mb
+                )
+                validation_result['disk_space_validation'] = disk_space_validation
+                if not cap_valid:
+                    # _evaluate_capacity_for_operation reports capacity problems as errors
+                    validation_result['valid'] = False
+                    validation_result['errors'].extend(cap_errors)
+                validation_result['warnings'].extend(cap_warnings)
+                validation_result['recommendations'].extend(cap_recs)
             
-            # Add operation-specific recommendations
-            if operation_type in ['write', 'copy']:
-                if estimated_size_mb > 100:  # Large file
-                    validation_result['recommendations'].append(
-                        "Consider using compression for large files"
-                    )
-            try:
-                if os.environ.get('DEBUG_CONSTRAINTS'):
-                    print('DEBUG_CONSTRAINTS: preop_validation_result=', validation_result)
-            except Exception:
-                pass
+            # Add operation-specific recommendations via helper
+            op_recs = _gather_operation_recommendations(operation_type, estimated_size_mb)
+            validation_result['recommendations'].extend(op_recs)
+            # Debug using structured logging
+            logger.debug('preop_validation_result=%s', validation_result)
         except Exception as e:
             validation_result['valid'] = False
-            try:
-                if os.environ.get('DEBUG_CONSTRAINTS'):
-                    import traceback
-                    print('DEBUG_CONSTRAINTS: exception in validate_before_operation:', repr(e))
-                    traceback.print_exc()
-            except Exception:
-                pass
+            logger.exception('exception in validate_before_operation')
             validation_result['errors'].append(f"Pre-operation validation error: {e}")
         
         return validation_result
