@@ -150,21 +150,21 @@ class GoogleAuthManager:
         "openid",
     ]
 
-    def __init__(self, app_dir: Optional[Path | str] = None) -> None:
+    def __init__(self, app_dir: Optional[Path | str] = None, *, config_manager: Optional[Any] = None, credentials: Optional[Any] = None) -> None:
         self.app_dir: Path = Path(app_dir) if app_dir else Path(__file__).parent.parent
         self.credentials_dir: Path = self.app_dir / "cloud" / "credentials"
         self.credentials_file: Path = self.credentials_dir / "token.json"
         self.client_secrets_file: Path = self.app_dir / "config" / "client_secrets.json"
-
-        # Optional external config source - resolved lazily in _get_client_config to
-        # avoid importing global singletons during test collection or when the app
-        # package is present on PYTHONPATH. Tests often rely on config_manager being
-        # absent at initialization time.
-        self.config_manager = None
+        # Allow injecting a config_manager and/or credentials for testing or DI.
+        # If not provided, config_manager will be resolved lazily in _get_client_config.
+        self.config_manager: Optional[Any] = config_manager
 
         self.credentials_dir.mkdir(parents=True, exist_ok=True)
-        self.credentials: Optional[Any] = None
-        self._load_credentials_if_present()
+        # Credentials may be injected for DI/testing. Only attempt to auto-load
+        # from disk when no credentials were injected.
+        self.credentials: Optional[Any] = credentials
+        if self.credentials is None:
+            self._load_credentials_if_present()
 
     # ---- Public API ---------------------------------------------------------------------------
     def is_authenticated(self) -> bool:
@@ -329,9 +329,13 @@ class GoogleAuthManager:
 
         if self.config_manager is not None:
             try:
-                cfg = self.config_manager.get_google_credentials_config()
-                if cfg:
-                    return cfg
+                # Use getattr to avoid static-analysis complaints about unknown attributes
+                get_cfg = getattr(self.config_manager, "get_google_credentials_config", None)
+                if callable(get_cfg):
+                    cfg = get_cfg()
+                    # Ensure cfg is a dictionary before returning to satisfy type checks
+                    if isinstance(cfg, dict):
+                        return cfg
             except Exception as e:  # pragma: no cover
                 logger.error("Error from config_manager: %s", e)
 

@@ -49,10 +49,9 @@ class TestPhase3AudioRecorderIntegration(unittest.TestCase):
             self.assertIsInstance(raw_path, Path)
             self.assertTrue(str(raw_path).endswith('raw'))
             
-            print(f"✅ Storage config integration: {storage_config.environment}")
-            print(f"✅ Raw recordings path: {raw_path}")
-            
-            return True
+            print("✅ Storage config integration: {}".format(storage_config.environment))
+            print("✅ Raw recordings path: {}".format(raw_path))
+            # success
             
         except Exception as e:
             self.fail(f"Storage config integration failed: {e}")
@@ -70,14 +69,13 @@ class TestPhase3AudioRecorderIntegration(unittest.TestCase):
                 enhanced_info = storage_config.get_enhanced_path_info()
                 self.assertIsInstance(enhanced_info, dict)
                 self.assertIn('available', enhanced_info)
-                print(f"✅ Enhanced path features available: {enhanced_info['available']}")
-            
-            if hasattr(storage_config, 'get_path_for_type_enhanced'):
-                enhanced_path = storage_config.get_path_for_type_enhanced('raw')
-                self.assertIsInstance(enhanced_path, dict)
-                print(f"✅ Enhanced path method working")
-            
-            return True
+                print("✅ Enhanced path features available: {}".format(enhanced_info['available']))
+
+                if hasattr(storage_config, 'get_path_for_type_enhanced'):
+                    enhanced_path = storage_config.get_path_for_type_enhanced('raw')
+                    self.assertIsInstance(enhanced_path, dict)
+                    print("✅ Enhanced path method working")
+                # success
             
         except Exception as e:
             self.fail(f"Enhanced path management integration failed: {e}")
@@ -98,10 +96,9 @@ class TestPhase3AudioRecorderIntegration(unittest.TestCase):
             self.assertIsInstance(metadata, dict)
             self.assertIn('filesize_bytes', metadata)
             
-            print(f"✅ Metadata calculator working")
-            print(f"✅ Metadata keys: {list(metadata.keys())}")
-            
-            return True
+            print("✅ Metadata calculator working")
+            print("✅ Metadata keys: {}".format(list(metadata.keys())))
+            # success
             
         except Exception as e:
             self.fail(f"Metadata calculator integration failed: {e}")
@@ -118,10 +115,9 @@ class TestPhase3AudioRecorderIntegration(unittest.TestCase):
             self.assertIn('testing', environments)
             self.assertIn('production', environments)
             
-            print(f"✅ Environment manager working")
-            print(f"✅ Supported environments: {environments}")
-            
-            return True
+            print("✅ Environment manager working")
+            print("✅ Supported environments: {}".format(environments))
+            # success
             
         except Exception as e:
             self.fail(f"Environment manager integration failed: {e}")
@@ -144,12 +140,11 @@ class TestPhase3AudioRecorderIntegration(unittest.TestCase):
                 result = storage_config.ensure_directories_enhanced()
                 self.assertIsInstance(result, dict)
                 self.assertIn('success', result)
-                print(f"✅ Enhanced directory creation: {result['success']}")
+                print("✅ Enhanced directory creation: {}".format(result['success']))
             
-            print(f"✅ Storage validation working")
-            print(f"✅ Free space: {storage_info['free_mb']}MB")
-            
-            return True
+            print("✅ Storage validation working")
+            print("✅ Free space: {}MB".format(storage_info['free_mb']))
+            # success
             
         except Exception as e:
             self.fail(f"Storage validation integration failed: {e}")
@@ -184,16 +179,13 @@ class TestPhase3AudioRecorderIntegration(unittest.TestCase):
             self.assertIn('environment', storage_info)
             self.assertEqual(storage_info['environment'], 'testing')
             
-            print(f"✅ Enhanced audio recorder initialized")
-            print(f"✅ Environment: {recorder.environment}")
-            print(f"✅ Output directory: {recorder.output_directory}")
-            
-            return True
-            
+            print("✅ Enhanced audio recorder initialized")
+            print("✅ Environment: {}".format(recorder.environment))
+            print("✅ Output directory: {}".format(recorder.output_directory))
+            # success
         except ImportError as e:
-            print(f"⚠️  Enhanced audio recorder import failed: {e}")
-            print("This is expected if the integration is not yet complete")
-            return False
+            # Enhanced audio recorder may not be available in some test environments
+            self.skipTest("Enhanced audio recorder not available: {}".format(e))
         except Exception as e:
             self.fail(f"Enhanced audio recorder integration failed: {e}")
     
@@ -214,10 +206,9 @@ class TestPhase3AudioRecorderIntegration(unittest.TestCase):
             raw_path = legacy_config.get_path_for_type('raw')
             self.assertIsInstance(raw_path, Path)
             
-            print(f"✅ Backward compatibility maintained")
-            print(f"✅ Legacy import working")
-            
-            return True
+            print("✅ Backward compatibility maintained")
+            print("✅ Legacy import working")
+            # success
             
         except Exception as e:
             self.fail(f"Backward compatibility test failed: {e}")
