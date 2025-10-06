@@ -1,3 +1,24 @@
+"""Generic Alembic script template (minimal)
+
+This file is intentionally small; Alembic's `revision --autogenerate` will use
+this template to render migration scripts.
+"""
+<%text>
+Revision ID: ${up_revision}
+Revises: ${down_revision | none}
+Create Date: ${create_date}
+</%text>
+
+from alembic import op
+import sqlalchemy as sa
+
+
+def upgrade():
+    pass
+
+
+def downgrade():
+    pass
 """${message}
 
 Revision ID: ${up_revision}

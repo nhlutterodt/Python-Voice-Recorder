@@ -4,6 +4,7 @@
 import sys
 from PySide6.QtWidgets import QApplication
 from enhanced_editor import EnhancedAudioEditor
+from models.database import engine, Base
 from core.logging_config import setup_application_logging
 
 # Setup application-wide logging
@@ -26,6 +27,13 @@ def main():
     
     # Create and show main window
     try:
+        # Ensure database tables exist (creates missing tables in sqlite)
+        try:
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database tables ensured (create_all completed)")
+        except Exception as e:
+            logger.warning(f"Could not create database tables on startup: {e}")
+
         window = EnhancedAudioEditor()
         window.show()
         logger.info("Main window created and displayed")
