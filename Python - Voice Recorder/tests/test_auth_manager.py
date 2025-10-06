@@ -25,6 +25,7 @@ from cloud.auth_manager import (
     GOOGLE_APIS_AVAILABLE,
     _restrict_file_permissions
 )
+from cloud.auth_manager import _close_same_process_handles
 
 
 class TestUtilityFunctions:
@@ -76,6 +77,24 @@ class TestUtilityFunctions:
                     assert permissions == 0o600, f"Expected 0o600, got {oct(permissions)}"
             finally:
                 tmp_path.unlink(missing_ok=True)
+
+    def test_close_same_process_handles(self):
+        """Ensure our helper can close same-process file handles so unlink works on Windows."""
+        # Create a NamedTemporaryFile and keep it open to simulate the Windows behavior
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        tmp_path = Path(tmp.name)
+        try:
+            # At this point, the file is still open in this process
+            # Our helper should attempt to close any same-process handles so unlink can succeed
+            _close_same_process_handles(tmp_path)
+            # After calling the helper, we should be able to unlink the file
+            tmp_path.unlink(missing_ok=True)
+        finally:
+            # Ensure we clean up and close the original object if still open
+            try:
+                tmp.close()
+            except Exception:
+                pass
 
 
 class TestAuthCallbackServer:

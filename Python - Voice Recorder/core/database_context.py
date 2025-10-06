@@ -113,7 +113,8 @@ class DatabaseContextManager:
         """
         # Check circuit breaker
         if self._is_circuit_breaker_open():
-            raise DatabaseCircuitBreakerError("Database circuit breaker is open - too many recent failures")
+            # Tests expect the message to include the phrase 'Circuit breaker is open'
+            raise DatabaseCircuitBreakerError("Circuit breaker is open - too many recent failures")
         
         # Check disk space if requested (skip for read-only operations)
         if check_disk_space and not readonly:
@@ -122,8 +123,16 @@ class DatabaseContextManager:
         
         session = None
         retry_count = 0
-        
-        while retry_count <= self.config.max_retries:
+        # Use 'retry_attempts' as the number of attempts when provided (tests expect this),
+        # otherwise fall back to max_retries for backward compatibility.
+        max_attempts = getattr(self.config, 'retry_attempts', None) or getattr(self.config, 'max_retries', 1)
+        # Ensure at least one attempt
+        try:
+            max_attempts = max(1, int(max_attempts))
+        except Exception:
+            max_attempts = 1
+
+        while retry_count < max_attempts:
             try:
                 session = self._create_session_with_config()
                 
@@ -148,9 +157,18 @@ class DatabaseContextManager:
                 break
                 
             except (OperationalError, DisconnectionError) as e:
+                # Handle a connection-related error for this attempt (do not mark circuit breaker yet)
                 self._handle_connection_error(e, session, retry_count)
-                if retry_count >= self.config.max_retries:
-                    raise DatabaseConnectionError(f"Database connection failed after {self.config.max_retries} retries: {e}") from e
+                if retry_count >= (max_attempts - 1):
+                    # Final failure for this get_session call: increment circuit breaker once
+                    with self._lock:
+                        self._circuit_breaker_failures += 1
+                        self._circuit_breaker_last_failure = time.time()
+                    raise DatabaseConnectionError(
+                        f"Database connection failed after {max_attempts} attempts: {e}",
+                        original_error=e,
+                        retry_count=max_attempts
+                    ) from e
                     
             except IntegrityError as e:
                 self._handle_integrity_error(e, session)
@@ -166,8 +184,25 @@ class DatabaseContextManager:
                 raise DatabaseTransactionError(f"Database transaction failed: {e}") from e
                 
             except Exception as e:
-                self._handle_unexpected_error(e, session)
-                raise
+                # If session is None then the error happened during session creation
+                # (e.g., session_factory raised). Treat this like a connection error so
+                # retry logic applies; after exhausting attempts, raise DatabaseConnectionError.
+                if session is None:
+                    self._handle_connection_error(e, session, retry_count)
+                    if retry_count >= (max_attempts - 1):
+                        with self._lock:
+                            self._circuit_breaker_failures += 1
+                            self._circuit_breaker_last_failure = time.time()
+                        raise DatabaseConnectionError(
+                            f"Database connection failed after {max_attempts} attempts: {e}",
+                            original_error=e,
+                            retry_count=max_attempts
+                        ) from e
+                    # allow retry
+                else:
+                    # Unexpected error after session creation — keep existing behavior
+                    self._handle_unexpected_error(e, session)
+                    raise
                 
             finally:
                 if session:
@@ -208,12 +243,13 @@ class DatabaseContextManager:
     def _handle_connection_error(self, error: Exception, session: Optional[Session], retry_count: int):
         """Handle connection-related errors with circuit breaker logic"""
         with self._lock:
+            # Count the failed connection attempt; the circuit-breaker failure
+            # count itself should only increment when a get_session call fails
+            # permanently (after all retries).
             self._failed_connections += 1
-            self._circuit_breaker_failures += 1
-            self._circuit_breaker_last_failure = time.time()
-            
+
         logger.warning(f"Database connection error (attempt {retry_count + 1}): {error}")
-        
+
         if session:
             self._safe_rollback(session)
     
@@ -417,7 +453,9 @@ class DatabaseConnectionError(Exception):
     """Raised when database connection cannot be established"""
     def __init__(self, message: str = "Database connection error", original_exception: Optional[Exception] = None, **kwargs: Any):
         super().__init__(message)
+        # Expose both names for backward-compatibility with tests and callers
         self.original_exception = original_exception
+        self.original_error = original_exception
         # Expose any extra keyword args as attributes for tests
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -428,6 +466,7 @@ class DatabaseTransactionError(Exception):
     def __init__(self, message: str = "Database transaction error", original_exception: Optional[Exception] = None, **kwargs: Any):
         super().__init__(message)
         self.original_exception = original_exception
+        self.original_error = original_exception
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -437,6 +476,7 @@ class DatabaseIntegrityError(Exception):
     def __init__(self, message: str = "Database integrity error", original_exception: Optional[Exception] = None, **kwargs: Any):
         super().__init__(message)
         self.original_exception = original_exception
+        self.original_error = original_exception
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -446,6 +486,7 @@ class DatabaseTimeoutError(Exception):
     def __init__(self, message: str = "Database timeout", original_exception: Optional[Exception] = None, **kwargs: Any):
         super().__init__(message)
         self.original_exception = original_exception
+        self.original_error = original_exception
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -455,6 +496,7 @@ class DatabaseCircuitBreakerError(Exception):
     def __init__(self, message: str = "Circuit breaker open", original_exception: Optional[Exception] = None, **kwargs: Any):
         super().__init__(message)
         self.original_exception = original_exception
+        self.original_error = original_exception
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -464,6 +506,7 @@ class DatabaseDiskSpaceError(Exception):
     def __init__(self, message: str = "Insufficient disk space", original_exception: Optional[Exception] = None, **kwargs: Any):
         super().__init__(message)
         self.original_exception = original_exception
+        self.original_error = original_exception
         for k, v in kwargs.items():
             setattr(self, k, v)
 

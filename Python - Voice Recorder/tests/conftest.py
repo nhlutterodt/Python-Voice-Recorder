@@ -4,6 +4,10 @@ import pytest
 from pathlib import Path
 from models.database import Base, engine, SessionLocal
 
+# Prevent pytest from trying to collect the standalone comprehensive auth test
+# (it provides its own TestRunner and is meant to be executed directly).
+collect_ignore = ["test_auth_manager_comprehensive.py"]
+
 
 @pytest.fixture(scope="function")
 def tmp_recordings_dir(tmp_path):
