@@ -93,6 +93,20 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install -r requirements_dev.txt
+
+    - name: Run environment checks (powershell script)
+      run: |
+        echo "Running repository environment checks"
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          pwsh -NoProfile -ExecutionPolicy Bypass -File "%GITHUB_WORKSPACE%\Python - Voice Recorder\scripts\check_env.ps1"
+        else
+          # Try to run PowerShell Core on linux/macos runners
+          if command -v pwsh >/dev/null 2>&1; then
+            pwsh -NoProfile -File "$GITHUB_WORKSPACE/Python - Voice Recorder/scripts/check_env.ps1"
+          else
+            echo "pwsh (PowerShell Core) not found on runner; skipping environment checks"
+          fi
+        fi
         
     - name: Test imports and basic functionality
       run: |
