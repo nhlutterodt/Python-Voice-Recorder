@@ -4,7 +4,7 @@
 from PySide6.QtWidgets import (
     QWidget, QPushButton, QLabel, QFileDialog,
     QVBoxLayout, QHBoxLayout, QLineEdit, QMessageBox,
-    QProgressBar, QTabWidget
+    QProgressBar, QTabWidget, QComboBox
 )
 from waveform_viewer import WaveformViewer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -284,7 +284,7 @@ class EnhancedAudioEditor(QWidget):
         self.audio_level = QLabel(UIConstants.AUDIO_LEVEL_EMPTY)
         self.audio_level.setStyleSheet("color: #7f8c8d; font-size: 10px;")
         
-        record_layout.addWidget(self.record_button)
+    record_layout.addWidget(self.record_button)
         record_layout.addWidget(QLabel("Duration:"))
         record_layout.addWidget(self.recording_duration)
         record_layout.addWidget(self.audio_level)
@@ -293,6 +293,20 @@ class EnhancedAudioEditor(QWidget):
         layout.addWidget(record_label)
         layout.addWidget(self.recording_status)
         layout.addLayout(record_layout)
+    # Device selection row
+    device_layout = QHBoxLayout()
+    device_layout.addWidget(QLabel("Input Device:"))
+    self.device_selector = QComboBox()
+    self.device_selector.setEditable(False)
+    self.device_selector.currentIndexChanged.connect(self.on_device_selected)
+    device_layout.addWidget(self.device_selector)
+
+    self.refresh_devices_btn = QPushButton("Refresh Devices")
+    self.refresh_devices_btn.clicked.connect(self.populate_device_list)
+    device_layout.addWidget(self.refresh_devices_btn)
+    device_layout.addStretch()
+
+    layout.addLayout(device_layout)
         
         section.setLayout(layout)
         return section
@@ -680,6 +694,12 @@ class EnhancedAudioEditor(QWidget):
         self.audio_recorder.recording_error.connect(self.on_recording_error)  # type: ignore
         self.audio_recorder.device_status_changed.connect(self.on_device_status_changed)  # type: ignore
 
+        # Populate device list for UI and select default
+        try:
+            self.populate_device_list()
+        except Exception:
+            logger.exception("Failed to populate device list")
+
     def toggle_recording(self):
         """Toggle recording start/stop"""
         if not self.is_recording:
@@ -693,16 +713,60 @@ class EnhancedAudioEditor(QWidget):
             return
 
         # Start recording with auto-generated filename
+        # Use manager-selected device by default (UI set via device_selector)
         success = self.audio_recorder.start_recording()  # type: ignore
         if not success:
             self.recording_status.setText("❌ Failed to start recording")
+        else:
+            # Start level monitoring for visual feedback (uses selected device)
+            try:
+                self.audio_recorder.start_level_monitoring()
+            except Exception:
+                logger.exception("Failed to start level monitoring")
 
     def stop_recording(self):
         """Stop audio recording"""
         if not self.is_recording:
             return
-            
         self.audio_recorder.stop_recording()
+        try:
+            self.audio_recorder.stop_level_monitoring()
+        except Exception:
+            logger.exception("Failed to stop level monitoring")
+
+    def populate_device_list(self) -> None:
+        """Fill the device selector combo box with available input devices."""
+        try:
+            devices = self.audio_recorder.get_available_devices()
+            self.device_selector.blockSignals(True)
+            self.device_selector.clear()
+            self.device_selector.addItem("Default")
+            for dev in devices:
+                self.device_selector.addItem(f"{dev['index']}: {dev['name']}", dev['index'])
+            self.device_selector.blockSignals(False)
+            # If manager has a selected device, set it
+            sel = self.audio_recorder.get_selected_device()
+            if sel is not None:
+                # Find index in combo box
+                for i in range(self.device_selector.count()):
+                    data = self.device_selector.itemData(i)
+                    if data == sel:
+                        self.device_selector.setCurrentIndex(i)
+                        break
+        except Exception as e:
+            logger.exception("Error populating device list: %s", e)
+
+    def on_device_selected(self, index: int) -> None:
+        """Handle user selecting a device in the combo box."""
+        try:
+            data = self.device_selector.itemData(index)
+            if data is None:
+                # Default selected
+                self.audio_recorder.set_selected_device(None)
+            else:
+                self.audio_recorder.set_selected_device(data)
+        except Exception:
+            logger.exception("Error handling device selection")
 
     def on_recording_started(self) -> None:
         """Handle recording start"""
