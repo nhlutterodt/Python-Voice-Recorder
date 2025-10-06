@@ -12,16 +12,14 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from models.database import SessionLocal, db_context
+from models.database import db_context
 from core.database_health import DatabaseHealthMonitor
 from services.enhanced_file_storage import (
-    EnhancedFileStorageService, StorageConfig, 
-    DatabaseSessionError, FileConstraintError, StorageOperationError,
+    EnhancedFileStorageService, DatabaseSessionError, FileConstraintError, StorageOperationError,
     StorageValidationError
 )
 from core.logging_config import setup_application_logging
 import sys
-import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 from performance_monitor import PerformanceBenchmark
 
@@ -243,7 +241,7 @@ def main():
         print(f"\n🎯 Overall Status: ❌ {len(failed_tests)} VALIDATION(S) FAILED")
         return 1
     else:
-        print(f"\n🎯 Overall Status: ✅ ALL VALIDATIONS PASSED")
+        print("\n🎯 Overall Status: ✅ ALL VALIDATIONS PASSED")
         print("\n🎉 Implementation is PERFECT and COMPLETE!")
         return 0
 

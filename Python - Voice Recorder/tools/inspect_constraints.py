@@ -1,7 +1,6 @@
 import tempfile
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from services.file_storage.config.constraints import ConstraintConfig, StorageConstraints
 

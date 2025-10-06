@@ -4,7 +4,6 @@ Database migration runner for Voice Recorder Pro.
 
 This script handles database schema migrations safely.
 """
-import os
 import sys
 import shutil
 from pathlib import Path

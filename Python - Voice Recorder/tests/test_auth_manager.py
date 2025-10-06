@@ -9,7 +9,7 @@ import pytest
 import tempfile
 import json
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 import sys
 import os
 

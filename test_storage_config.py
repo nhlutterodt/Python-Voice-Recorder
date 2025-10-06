@@ -4,7 +4,6 @@ Test script to verify StorageConfig functionality
 This creates a minimal working version to test Phase 1 fixes
 """
 
-import os
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Union
 from dataclasses import dataclass

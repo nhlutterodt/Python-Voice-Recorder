@@ -20,7 +20,6 @@ from sqlalchemy.exc import (
     TimeoutError,
     DisconnectionError
 )
-from sqlalchemy.pool import StaticPool
 from sqlalchemy import text
 import psutil
 
@@ -222,7 +221,7 @@ class DatabaseContextManager:
             if hasattr(session.bind, 'execute'):
                 session.execute(text(f"PRAGMA busy_timeout={self.config.connection_timeout * 1000}"))
             return session
-        except Exception as e:
+        except Exception:
             with self._lock:
                 self._failed_connections += 1
             raise

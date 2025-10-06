@@ -7,10 +7,8 @@ Validates all functionality before refactoring to ensure zero feature loss
 import sys
 import os
 import tempfile
-import json
 from pathlib import Path
-from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -335,7 +333,7 @@ class PreMigrationValidator:
                 test_file.write_text("Test content for integration test")
                 
                 # Test metadata calculation
-                metadata = FileMetadataCalculator.calculate_metadata(
+                FileMetadataCalculator.calculate_metadata(
                     str(test_file), 
                     include_audio=False
                 )

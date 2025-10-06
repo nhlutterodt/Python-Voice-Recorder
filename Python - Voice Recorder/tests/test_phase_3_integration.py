@@ -7,7 +7,7 @@ import sys
 import os
 import tempfile
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from pathlib import Path
 
 # Add project root to path for imports

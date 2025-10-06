@@ -4,7 +4,6 @@ Project Cleanup Analysis and Recommendations
 Identifies files that can be safely deleted now that backend enhancements are complete
 """
 
-import os
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -163,7 +162,7 @@ def main():
         for file_path, reason in cleanup_plan["NEEDS_REVIEW"]:
             print(f"   Review: {Path(file_path).name} - {reason}")
     
-    print(f"\n🎉 CLEANUP BENEFIT")
+    print("\n🎉 CLEANUP BENEFIT")
     print("─" * 40)
     print(f"Removing {total_deletable} unnecessary files will:")
     print("• Reduce project clutter and improve navigation")

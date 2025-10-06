@@ -1,4 +1,5 @@
-import tempfile, os
+import tempfile
+import os
 from unittest.mock import MagicMock
 from pathlib import Path
 

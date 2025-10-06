@@ -20,10 +20,8 @@ def validate_complete_integration():
     
     try:
         # Test 1: All major components can be imported
-        from services.file_storage import EnhancedFileStorageService
-        from services.file_storage.config import StorageConfig, EnvironmentManager, StoragePathManager
+        from services.file_storage.config import StorageConfig, EnvironmentManager
         from services.file_storage.metadata import FileMetadataCalculator
-        from services.file_storage.exceptions import StorageConfigValidationError
         print("✅ All major components import successfully")
         
         # Test 2: Components can work together in a real scenario
@@ -45,7 +43,7 @@ def validate_complete_integration():
             print(f"✅ Enhanced path info available: {enhanced_info.get('available', False)}")
             
             # Test 3: Metadata calculator
-            metadata_calc = FileMetadataCalculator()
+            FileMetadataCalculator()
             print("✅ FileMetadataCalculator ready")
             
         return True
@@ -167,7 +165,7 @@ def assess_next_phase_readiness():
     # Calculate readiness score
     readiness_score = sum(readiness_factors.values()) / len(readiness_factors)
     
-    print(f"\n📊 READINESS ASSESSMENT:")
+    print("\n📊 READINESS ASSESSMENT:")
     for factor, status in readiness_factors.items():
         status_icon = "✅" if status else "⚠️"
         print(f"   {status_icon} {factor.replace('_', ' ').title()}: {status}")
@@ -211,7 +209,7 @@ def main():
     print(f"🚀 Next Recommended Step: {next_step}")
     
     if cleanup_items:
-        print(f"\n🧹 CLEANUP RECOMMENDATIONS:")
+        print("\n🧹 CLEANUP RECOMMENDATIONS:")
         for item in cleanup_items:
             print(f"   - {item}")
     
@@ -219,7 +217,7 @@ def main():
     needs_update = [app for app, status in app_integration.items() 
                    if status.get('needs_update', False)]
     if needs_update:
-        print(f"\n📱 APPLICATION UPDATES NEEDED:")
+        print("\n📱 APPLICATION UPDATES NEEDED:")
         for app in needs_update:
             print(f"   - {app}: Update imports to use new modular structure")
     

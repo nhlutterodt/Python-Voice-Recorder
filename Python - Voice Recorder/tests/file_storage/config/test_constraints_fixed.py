@@ -5,7 +5,6 @@ Tests for Storage Constraints Module - Phase 3 (Fixed)
 import os
 import tempfile
 import pytest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from services.file_storage.config.constraints import (
@@ -15,7 +14,6 @@ from services.file_storage.config.constraints import (
     create_constraints_from_environment
 )
 from services.file_storage.config.environment import EnvironmentConfig
-from services.file_storage.exceptions import StorageConfigValidationError
 
 
 class TestConstraintConfig:

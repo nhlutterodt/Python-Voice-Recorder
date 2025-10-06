@@ -5,11 +5,7 @@ Tests health checks, monitoring system, alerts, and performance tracking.
 
 import pytest
 import time
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from typing import List, Dict, Any
+from unittest.mock import Mock, patch
 
 # Test the enhanced database health monitoring
 from core.database_health import (

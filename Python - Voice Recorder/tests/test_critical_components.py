@@ -108,7 +108,7 @@ class CriticalComponentsTester:
             context_manager = DatabaseContextManager(SessionLocal, config)
             
             # Test session creation and cleanup
-            initial_metrics = context_manager.get_session_metrics()
+            context_manager.get_session_metrics()
             
             with context_manager.get_session() as session:
                 # Verify session is active
@@ -363,7 +363,7 @@ class CriticalComponentsTester:
         """Test that backward compatibility is maintained"""
         try:
             # Test that original database functionality still works
-            from models.database import SessionLocal, engine
+            from models.database import SessionLocal
             
             # Test basic session creation (original way)
             session = SessionLocal()
@@ -374,7 +374,7 @@ class CriticalComponentsTester:
             # Test that enhanced components don't break existing functionality
             config = DatabaseConfig.from_environment("testing")
             context_manager = DatabaseContextManager(SessionLocal, config)
-            health_monitor = DatabaseHealthMonitor()
+            DatabaseHealthMonitor()
             
             # Test enhanced functionality doesn't interfere with basic operations
             with context_manager.get_session() as enhanced_session:

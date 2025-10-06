@@ -93,7 +93,7 @@ def run_import_checks() -> Dict[str, Any]:
 
 def test_imports() -> None:
     """Pytest wrapper that doesn't return a value to avoid warnings."""
-    results = run_import_checks()
+    run_import_checks()
     # Keep non-fatal; if you want strict, assert results['failed'] == 0
     assert True
 

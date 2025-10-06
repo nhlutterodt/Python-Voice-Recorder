@@ -17,9 +17,6 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, List, Union
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
-from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +196,7 @@ class StorageConfig:
                     try:
                         self.constraints = self._StorageConstraints()
                         constructed = True
-                    except Exception as e:
+                    except Exception:
                         raise
 
                 logger.debug("Storage constraints component initialized")

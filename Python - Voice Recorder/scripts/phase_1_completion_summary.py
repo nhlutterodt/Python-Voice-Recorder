@@ -10,7 +10,7 @@ import sys
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 
-from services.file_storage.config.environment import EnvironmentManager, EnvironmentConfig
+from services.file_storage.config.environment import EnvironmentManager
 from services.file_storage.config import StorageConfig
 
 
@@ -57,7 +57,7 @@ def summarize_phase_1_completion():
         'min_disk_space_mb': 1000,
         'enable_backup': True
     })
-    print(f"  🛠️  Custom config: dev with 1000MB min and backup enabled")
+    print("  🛠️  Custom config: dev with 1000MB min and backup enabled")
     print(f"     Result: {custom_config.min_disk_space_mb}MB, backup={custom_config.enable_backup}")
     
     print()
@@ -66,7 +66,7 @@ def summarize_phase_1_completion():
     print("🔄 BACKWARD COMPATIBILITY:")
     storage_config = StorageConfig.from_environment('testing')
     print(f"  ✅ StorageConfig.from_environment still works: {storage_config.environment}")
-    print(f"  ✅ All existing APIs preserved")
+    print("  ✅ All existing APIs preserved")
     print()
     
     # Show benefits achieved

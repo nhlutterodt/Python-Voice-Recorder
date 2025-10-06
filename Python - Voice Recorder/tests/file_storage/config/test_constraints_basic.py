@@ -14,7 +14,6 @@ from services.file_storage.config.constraints import (
     create_constraints_from_environment
 )
 from services.file_storage.config.environment import EnvironmentConfig
-from services.file_storage.exceptions import StorageConfigValidationError
 
 
 def test_constraint_config_creation():

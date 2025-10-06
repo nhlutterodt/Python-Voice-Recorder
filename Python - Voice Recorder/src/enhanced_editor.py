@@ -16,16 +16,14 @@ from typing import Optional, Any  # Union not used
 
 from audio_processing import (
     AudioLoaderThread, 
-    AudioTrimProcessor, 
-    ProgressDialog  # type: ignore
+    AudioTrimProcessor  # type: ignore
 )
 from audio_recorder import AudioRecorderManager
 from models.database import SessionLocal
 from models.recording import Recording
 import sys
-import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts', 'utilities'))
-from version import CURRENT_VERSION, APP_NAME, UIConstants  # type: ignore
+from version import APP_NAME, UIConstants  # type: ignore
 from core.logging_config import get_logger
 
 # Setup logging for this module

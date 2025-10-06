@@ -6,8 +6,7 @@ from PySide6.QtWidgets import QProgressDialog, QApplication
 from pydub import AudioSegment  # type: ignore
 import wave
 import os
-import time
-from typing import Optional, cast
+from typing import cast
 from core.logging_config import get_logger
 
 # Setup logging for this module

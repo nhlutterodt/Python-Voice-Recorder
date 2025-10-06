@@ -3,12 +3,10 @@ Phase 2 Integration Tests: Path Management Module
 Test integration of enhanced path management with StorageConfig
 """
 
-import pytest
 import tempfile
 from pathlib import Path
 
 from services.file_storage.config import StorageConfig
-from services.file_storage.config.path_management import StoragePathManager, StoragePathConfig
 
 
 class TestPhase2Integration:

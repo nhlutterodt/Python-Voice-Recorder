@@ -7,7 +7,6 @@ if str(proj_root) not in sys.path:
 
 from unittest.mock import MagicMock
 from services.file_storage.config import constraints
-from services.file_storage.config.environment import EnvironmentConfig
 
 print('constraints module:', constraints)
 

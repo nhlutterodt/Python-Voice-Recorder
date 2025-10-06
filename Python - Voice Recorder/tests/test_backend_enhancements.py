@@ -14,12 +14,11 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import tempfile
 from typing import Optional
 import logging
-from pathlib import Path
 from services.enhanced_file_storage import (
     EnhancedFileStorageService, StorageConfig, 
-    DatabaseSessionError, FileConstraintError, StorageOperationError
+    FileConstraintError
 )
-from models.database import SessionLocal, db_context
+from models.database import db_context
 from core.database_health import DatabaseHealthMonitor
 
 # Configure logging for testing

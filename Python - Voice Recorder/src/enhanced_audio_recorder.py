@@ -6,7 +6,6 @@ import sounddevice as sd  # type: ignore
 from typing import Optional, List, Any, Dict
 from numpy.typing import NDArray
 import numpy as np
-from pydub import AudioSegment  # type: ignore
 import wave
 import os
 import time

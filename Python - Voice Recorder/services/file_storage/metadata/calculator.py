@@ -161,7 +161,7 @@ class FileMetadataCalculator:
         if detected_type == 'application/octet-stream':
             try:
                 with open(file_path, 'rb') as f:
-                    header = f.read(16)
+                    f.read(16)
                     # Add magic number detection logic here if needed
             except (OSError, IOError):
                 pass

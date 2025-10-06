@@ -1,6 +1,5 @@
 from typing import Any, Dict, Optional, List
 
-import pytest
 
 
 class StubAuthManagerUnauth:

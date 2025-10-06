@@ -136,7 +136,7 @@ def test_logout_functionality():
 
 def test_scopes_configuration():
     """Test OAuth scopes configuration"""
-    manager = GoogleAuthManager()
+    GoogleAuthManager()
     
     # Test that SCOPES is a class attribute
     assert hasattr(GoogleAuthManager, 'SCOPES')

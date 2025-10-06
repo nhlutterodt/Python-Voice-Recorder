@@ -15,7 +15,6 @@ from services.file_storage.config.constraints import (
     create_constraints_from_environment
 )
 from services.file_storage.config.environment import EnvironmentConfig
-from services.file_storage.exceptions import StorageConfigValidationError
 
 
 class TestConstraintConfig:
@@ -474,7 +473,7 @@ class TestIntegrationConstraints:
             
             # Create constraints
             constraints = create_constraints_from_environment('testing')
-            validator = ConstraintValidator(constraints)
+            ConstraintValidator(constraints)
             
             # Test with temporary file
             with tempfile.NamedTemporaryFile(delete=False) as temp_file:

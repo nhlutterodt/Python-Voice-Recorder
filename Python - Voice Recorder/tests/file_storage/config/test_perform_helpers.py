@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pytest
 
 import services.file_storage.config.constraints as constraints_mod
 

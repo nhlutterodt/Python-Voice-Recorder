@@ -1,7 +1,6 @@
 import datetime
 from decimal import Decimal
 
-from models.utils import to_dict
 from services.recording_utils import (
     compute_sha256_for_bytes,
     human_readable_size,

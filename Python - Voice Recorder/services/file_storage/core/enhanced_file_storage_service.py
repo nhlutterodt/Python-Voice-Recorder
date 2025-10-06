@@ -4,21 +4,18 @@ Main service class providing comprehensive file storage with database integratio
 """
 
 import os
-import shutil
 import uuid
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List
 
 # Local imports for components we've migrated
 from ..exceptions import (
     StorageValidationError,
-    FileMetadataError,
     DatabaseSessionError,
     FileConstraintError,
-    StorageOperationError,
-    StorageConfigValidationError
+    StorageOperationError
 )
 from ..metadata import FileMetadataCalculator
 from ..config import StorageConfig
@@ -28,10 +25,17 @@ try:
     from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError, NoResultFound
 except ImportError:
     # For testing without SQLAlchemy
-    class SQLAlchemyError(Exception): pass
-    class IntegrityError(SQLAlchemyError): pass
-    class OperationalError(SQLAlchemyError): pass
-    class NoResultFound(SQLAlchemyError): pass
+    class SQLAlchemyError(Exception):
+        pass
+
+    class IntegrityError(SQLAlchemyError):
+        pass
+
+    class OperationalError(SQLAlchemyError):
+        pass
+
+    class NoResultFound(SQLAlchemyError):
+        pass
 
 # Database imports with fallbacks for testing
 try:
@@ -430,7 +434,7 @@ class EnhancedFileStorageService:
             # Test storage constraints
             storage_info = self.storage_config.get_storage_info()
             if not storage_info.get('space_ok', True):
-                validation_results['errors'].append(f"Disk space constraint violated")
+                validation_results['errors'].append("Disk space constraint violated")
                 validation_results['constraints_valid'] = False
             
             # Test database integration

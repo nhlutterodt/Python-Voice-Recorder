@@ -1,7 +1,6 @@
 # assets/icon.py
 # Application icon data and branding resources
 
-import os
 from pathlib import Path
 
 def get_icon_path():

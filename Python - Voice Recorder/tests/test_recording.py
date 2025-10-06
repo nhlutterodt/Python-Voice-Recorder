@@ -3,7 +3,6 @@
 
 import sys
 from PySide6.QtWidgets import QApplication
-import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 from audio_recorder import AudioRecorderManager
@@ -84,7 +83,7 @@ def test_recording_manager():
         try:
             os.remove(test_file)
             print("🧹 Test file cleaned up")
-        except:
+        except Exception:
             print("⚠️ Could not remove test file")
         
         assert True

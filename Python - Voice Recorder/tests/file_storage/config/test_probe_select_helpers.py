@@ -1,9 +1,6 @@
-import builtins
-from pathlib import Path
 import types
 import unittest.mock as mock
 
-import pytest
 
 from services.file_storage.config import constraints
 
@@ -51,7 +48,6 @@ def test_select_candidate_prefers_mock():
     class FakeCollector:
         pass
 
-    fake_candidate = ({'free_mb': 10},)
     # Create a real method object (callable) for the first entry
     def real_method():
         return {'free_mb': 5}

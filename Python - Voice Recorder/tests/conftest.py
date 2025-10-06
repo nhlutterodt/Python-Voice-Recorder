@@ -1,8 +1,7 @@
 import shutil
-import tempfile
 import pytest
 from pathlib import Path
-from models.database import Base, engine, SessionLocal
+from models.database import Base, engine
 
 # Prevent pytest from trying to collect the standalone comprehensive auth test
 # (it provides its own TestRunner and is meant to be executed directly).
@@ -32,7 +31,6 @@ def tmp_recordings_dir(tmp_path):
 @pytest.fixture(scope="function")
 def temp_db_file(tmp_path):
     db_file = tmp_path / "test.db"
-    url = f"sqlite:///{db_file}"
     # monkeypatch engine? For simplicity tests will rely on in-memory DB setup externally
     Base.metadata.create_all(bind=engine)
     yield db_file

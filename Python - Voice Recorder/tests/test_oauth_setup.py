@@ -4,7 +4,6 @@ Quick test script to verify OAuth setup for Voice Recorder Pro
 Run this after placing client_secrets.json in the config/ folder
 """
 
-import os
 from pathlib import Path
 
 def check_dependencies():
@@ -72,7 +71,7 @@ def test_auth_manager_init():
     """Test if auth manager can be initialized"""
     try:
         from cloud.auth_manager import GoogleAuthManager
-        auth_manager = GoogleAuthManager()
+        GoogleAuthManager()
         print("✅ Authentication manager initialized")
         assert True
     except Exception as e:
@@ -100,7 +99,7 @@ def main():
         if test_func():
             passed += 1
         else:
-            print(f"💡 Fix this issue before proceeding")
+            print("💡 Fix this issue before proceeding")
     
     print(f"\n📊 RESULTS: {passed}/{total} tests passed")
     

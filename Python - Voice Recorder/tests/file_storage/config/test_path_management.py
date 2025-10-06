@@ -5,10 +5,8 @@ Test the enhanced path management functionality added in Phase 2
 
 import pytest
 import tempfile
-import os
-import stat
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from services.file_storage.config.path_management import (
     StoragePathType, StoragePathConfig, StoragePathManager, 

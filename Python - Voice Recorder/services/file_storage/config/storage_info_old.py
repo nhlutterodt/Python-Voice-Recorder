@@ -7,7 +7,7 @@ import os
 import shutil
 import platform
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 from datetime import datetime
 
 
@@ -228,7 +228,7 @@ class StorageInfoCollector:
         
         try:
             # Check basic health indicators
-            free_mb = storage_info.get('free_mb', 0)
+            storage_info.get('free_mb', 0)
             total_mb = storage_info.get('total_mb', 0)
             
             if total_mb > 0:
@@ -345,7 +345,7 @@ class StorageMetrics:
         
         # Extract values for analysis
         free_values = [m['free_mb'] for m in self._metrics_history]
-        used_values = [m['used_mb'] for m in self._metrics_history]
+        [m['used_mb'] for m in self._metrics_history]
         util_values = [m['utilization_percent'] for m in self._metrics_history]
         
         stats = {

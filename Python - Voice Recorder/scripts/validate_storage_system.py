@@ -6,7 +6,6 @@ Comprehensive validation for all implemented phases of the storage system refact
 """
 
 import sys
-import os
 import tempfile
 import traceback
 import argparse
@@ -188,7 +187,7 @@ def validate_environment_config():
         custom_config = {'min_disk_space_mb': 200, 'enable_backup': True}
         merged = config.merge_with_custom(custom_config)
         
-        if merged.min_disk_space_mb != 200 or merged.enable_backup != True:
+        if merged.min_disk_space_mb != 200 or not merged.enable_backup:
             print("  ❌ Custom config merge failed")
             return False
         print("  ✅ Custom config merge works correctly")
@@ -478,7 +477,7 @@ def validate_phase_2_integration():
                 print("  ⚠️ StorageConfig doesn't have path_manager (may be expected)")
             
             # Test that environment configs work with path management
-            env_config = EnvironmentManager.get_config('development')
+            EnvironmentManager.get_config('development')
             path_config = StoragePathConfig(base_path=Path(temp_dir))
             path_manager = StoragePathManager(path_config)
             

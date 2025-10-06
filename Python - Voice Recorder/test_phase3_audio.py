@@ -9,7 +9,6 @@ print('=' * 60)
 
 try:
     from src.enhanced_audio_recorder import EnhancedAudioRecorderManager
-    import time
     
     # Initialize manager
     manager = EnhancedAudioRecorderManager(environment='testing')
@@ -26,7 +25,7 @@ try:
     
     # Test storage info
     storage_info = manager.get_storage_info()
-    print(f'✅ Storage info:')
+    print('✅ Storage info:')
     print(f'   Environment: {storage_info.get("environment", "unknown")}')
     print(f'   Free space: {storage_info.get("free_mb", 0):.1f}MB')
     print(f'   Enhanced features: {storage_info.get("enhanced_features", False)}')

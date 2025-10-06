@@ -6,11 +6,8 @@ Tests circuit breaker, disk space validation, error handling, and configuration.
 import pytest
 import tempfile
 import time
-import os
-import shutil
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from contextlib import contextmanager
+from unittest.mock import Mock, patch
 
 # Test the enhanced database context
 from core.database_context import (
@@ -235,7 +232,7 @@ class TestDatabaseContextManager:
         # Mock session factory to always fail
         context_manager.session_factory.side_effect = Exception("Persistent connection error")
         
-        with pytest.raises(DatabaseConnectionError) as exc_info:
+        with pytest.raises(DatabaseConnectionError):
             with context_manager.get_session():
                 pass
         
@@ -253,7 +250,7 @@ class TestDatabaseContextManager:
             
             # Test exception in context
             try:
-                with context_manager.get_session() as session:
+                with context_manager.get_session():
                     assert context_manager._active_sessions == 1
                     raise ValueError("Test exception")
             except ValueError:

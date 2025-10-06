@@ -9,7 +9,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from sqlalchemy import create_engine
 from models.database import Base
-from models.recording import Recording
 
 def create_test_database():
     """Create database tables for testing purposes"""
