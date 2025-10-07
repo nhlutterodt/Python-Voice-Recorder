@@ -495,7 +495,9 @@ class EnhancedAudioRecorderManager(QObject):
 
         if not has_qt_app:
             try:
-                svc = RecordingService()
+                # Inject the application DB context so the service uses the same DB as the app
+                from models.database import db_context as app_db_context
+                svc = RecordingService(db_ctx=app_db_context)
                 rec = svc.create_from_file(file_path)
                 logger.info("Auto-created recording in DB (headless): %s", getattr(rec, 'id', None))
             except Exception:

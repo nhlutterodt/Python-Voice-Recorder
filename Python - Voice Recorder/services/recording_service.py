@@ -11,6 +11,7 @@ from models.recording import Recording
 from datetime import datetime, timezone
 
 from core.logging_config import get_logger
+from core.database_context import DBContextProtocol
 
 logger = get_logger(__name__)
 
@@ -19,10 +20,27 @@ RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class RecordingService:
-    """Service to handle ingestion and metadata capture for recordings."""
+    """Service to handle ingestion and metadata capture for recordings.
 
-    def __init__(self):
-        pass
+    Supports dependency injection for the database context and recordings
+    directory to simplify testing. If not provided, falls back to the
+    module-level defaults for backward compatibility.
+    """
+
+    def __init__(self, db_ctx: Optional[DBContextProtocol] = None, recordings_dir: Optional[Path] = None) -> None:
+        # db_ctx is an instance exposing get_session(...) (DatabaseContextManager or test double)
+        # Fall back to the module-level db_context imported from models.database
+        self.db_context: DBContextProtocol = db_ctx or db_context
+
+        # Allow overriding the recordings directory for tests
+        if recordings_dir:
+            self.recordings_dir = Path(recordings_dir).resolve()
+            try:
+                self.recordings_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                logger.exception("Failed to create recordings_dir: %s", self.recordings_dir)
+        else:
+            self.recordings_dir = RECORDINGS_DIR
 
     def _compute_checksum(self, path: Path) -> str:
         h = hashlib.sha256()
@@ -43,7 +61,7 @@ class RecordingService:
 
             # copy into recordings dir with uuid filename
             stored_name = f"{uuid.uuid4().hex}{src.suffix}"
-            dest = RECORDINGS_DIR / stored_name
+            dest = self.recordings_dir / stored_name
             shutil.copy2(src, dest)
 
             checksum = self._compute_checksum(dest)
@@ -62,21 +80,21 @@ class RecordingService:
         try:
             resolved = getattr(mdb, 'DATABASE_URL', None)
             logger.info("RecordingService resolved DATABASE_URL: %s", resolved)
-            # Also print to stdout for immediate test visibility
-            print(f"RecordingService resolved DATABASE_URL: {resolved}")
+            logger.debug("RecordingService resolved DATABASE_URL: %s", resolved)
         except Exception:
             logger.exception("Failed to read DATABASE_URL from models.database")
 
-        # create DB row using context manager
-        with db_context.get_session(autocommit=True) as session:
+        # create DB row using context manager (use injected db_context)
+        with self.db_context.get_session(autocommit=True) as session:
             try:
                 bind = session.get_bind()
                 # session.get_bind() may return Engine or Connection
                 bind_url = getattr(bind, 'url', None) or str(bind)
                 logger.info("RecordingService session bind: %s", bind_url)
-                print(f"RecordingService session bind: {bind_url}")
+                logger.debug("RecordingService session bind: %s", bind_url)
             except Exception:
                 logger.exception("Failed to determine session bind/engine URL")
+
             repo = RecordingRepository(session)
             rec = Recording(
                 filename=src.name,

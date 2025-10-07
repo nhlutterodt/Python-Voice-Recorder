@@ -1,5 +1,5 @@
 from services.recording_service import RecordingService
-from models.database import engine, Base
+from models.database import engine, Base, db_context as app_db_context
 
 
 def test_create_from_file(tmp_path):
@@ -11,7 +11,8 @@ def test_create_from_file(tmp_path):
     src = tmp_path / "sample.wav"
     src.write_bytes(b"RIFF....WAVEfmt ")
 
-    rs = RecordingService()
+    # Inject the app's db_context so the service uses the same engine used by Base.create_all
+    rs = RecordingService(db_ctx=app_db_context)
     rec = rs.create_from_file(str(src), title="Test Recording")
 
     assert rec.id is not None

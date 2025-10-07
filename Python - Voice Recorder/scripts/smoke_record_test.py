@@ -59,7 +59,9 @@ def main():
     # Check DB for metadata row
     # Try to persist metadata using the RecordingService (preferred)
     try:
-        svc = RecordingService()
+        # Use the application's db_context to ensure the same DB file/engine is targeted
+        from models.database import db_context as app_db_context
+        svc = RecordingService(db_ctx=app_db_context)
         rec = svc.create_from_file(str(out_file))
         print("✅ DB metadata row created via RecordingService:", getattr(rec, 'id', None))
         # Debug DB path

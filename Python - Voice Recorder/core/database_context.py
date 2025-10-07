@@ -9,7 +9,7 @@ import contextlib
 import threading
 import time
 import shutil
-from typing import Generator, Optional, Any, Dict
+from typing import Generator, Optional, Any, Dict, Protocol, runtime_checkable, ContextManager
 from pathlib import Path
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
@@ -69,6 +69,20 @@ class DatabaseConfig:
             )  # Default values
         }
         return configs.get(env, cls())
+
+
+@runtime_checkable
+class DBContextProtocol(Protocol):
+    """Protocol for database context managers used by services.
+
+    The protocol requires a get_session contextmanager with the same
+    signature used by DatabaseContextManager. This allows tests and
+    services to accept either the real DatabaseContextManager or a
+    test double that implements the same interface.
+    """
+
+    def get_session(self, autocommit: bool = False, readonly: bool = False, check_disk_space: bool = True) -> ContextManager[Session]:
+        ...
 
 
 class DatabaseContextManager:

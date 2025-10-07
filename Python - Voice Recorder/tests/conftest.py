@@ -1,3 +1,64 @@
+import tempfile
+from pathlib import Path
+from typing import Generator
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from core.database_context import DatabaseContextManager, DBContextProtocol
+from models import database as app_db_mod
+
+
+@pytest.fixture()
+def tmp_sqlite_engine(tmp_path: Path):
+    """Create a temporary SQLite engine bound to a file in tmp_path."""
+    db_file = tmp_path / "test_app.db"
+    url = f"sqlite:///{db_file.as_posix()}"
+    engine = create_engine(url, future=True)
+    yield engine
+    try:
+        engine.dispose()
+    except Exception:
+        pass
+
+
+@pytest.fixture()
+def tmp_db_context(tmp_sqlite_engine) -> Generator[DBContextProtocol, None, None]:
+    """Return a DatabaseContextManager using a sessionmaker bound to the tmp engine."""
+    session_factory = sessionmaker(bind=tmp_sqlite_engine, autoflush=False)
+    db_ctx: DBContextProtocol = DatabaseContextManager(session_factory)
+    # Ensure models are imported so metadata includes all tables
+    # Importing models.recording registers the Recording model with Base
+    try:
+        __import__("models.recording")
+    except Exception:
+        # Best-effort import; tests will fail if models are broken
+        pass
+    # Create tables for the test engine
+    try:
+        app_db_mod.Base.metadata.create_all(bind=tmp_sqlite_engine)
+    except Exception:
+        pass
+
+    yield db_ctx
+
+    # Teardown: drop tables and dispose engine
+    try:
+        app_db_mod.Base.metadata.drop_all(bind=tmp_sqlite_engine)
+    except Exception:
+        pass
+    try:
+        tmp_sqlite_engine.dispose()
+    except Exception:
+        pass
+
+
+@pytest.fixture()
+def recordings_dir(tmp_path: Path) -> Path:
+    d = tmp_path / "recordings"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 import os
 import sys
 from pathlib import Path
