@@ -27,12 +27,13 @@ def main():
     
     # Create and show main window
     try:
-        # Ensure database tables exist (creates missing tables in sqlite)
-        try:
-            Base.metadata.create_all(bind=engine)
-            logger.info("Database tables ensured (create_all completed)")
-        except Exception as e:
-            logger.warning(f"Could not create database tables on startup: {e}")
+        # Database creation at startup has been disabled so Alembic can manage schema
+        # For local development you can re-enable the call below (uncomment).
+        # try:
+        #     Base.metadata.create_all(bind=engine)
+        #     logger.info("Database tables ensured (create_all completed)")
+        # except Exception as e:
+        #     logger.warning(f"Could not create database tables on startup: {e}")
 
         window = EnhancedAudioEditor()
         window.show()

@@ -4,6 +4,7 @@ import hashlib
 import mimetypes
 from pathlib import Path
 from typing import Optional
+import models.database as mdb
 from models.database import db_context
 from repositories.recording_repository import RecordingRepository
 from models.recording import Recording
@@ -57,8 +58,25 @@ class RecordingService:
             logger.error(f"Unexpected error processing file {src_path}: {e}")
             raise
 
+        # Debug: report which DATABASE_URL / engine we're targeting
+        try:
+            resolved = getattr(mdb, 'DATABASE_URL', None)
+            logger.info("RecordingService resolved DATABASE_URL: %s", resolved)
+            # Also print to stdout for immediate test visibility
+            print(f"RecordingService resolved DATABASE_URL: {resolved}")
+        except Exception:
+            logger.exception("Failed to read DATABASE_URL from models.database")
+
         # create DB row using context manager
         with db_context.get_session(autocommit=True) as session:
+            try:
+                bind = session.get_bind()
+                # session.get_bind() may return Engine or Connection
+                bind_url = getattr(bind, 'url', None) or str(bind)
+                logger.info("RecordingService session bind: %s", bind_url)
+                print(f"RecordingService session bind: {bind_url}")
+            except Exception:
+                logger.exception("Failed to determine session bind/engine URL")
             repo = RecordingRepository(session)
             rec = Recording(
                 filename=src.name,
@@ -79,6 +97,12 @@ class RecordingService:
                 rec.checksum = checksum
 
             repo.add(rec)
+            try:
+                # Ensure the new record is committed to the DB before returning.
+                session.commit()
+            except Exception:
+                logger.exception("Commit failed in RecordingService")
+                raise
             session.refresh(rec)
             logger.info("Created recording %s (checksum=%s)", rec.id, checksum)
             return rec

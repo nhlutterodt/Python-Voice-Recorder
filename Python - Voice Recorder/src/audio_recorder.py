@@ -16,6 +16,12 @@ from performance_monitor import performance_monitor
 from core.logging_config import get_logger
 import threading
 
+# When running headless (scripts/tests) persist recordings to DB automatically
+try:
+    from services.recording_service import RecordingService
+except Exception:
+    RecordingService = None
+
 # Setup logging for this module
 logger = get_logger(__name__)
 
@@ -540,6 +546,22 @@ class AudioRecorderManager(QObject):
     def _on_recording_completed(self, file_path: str, duration: float):
         """Handle recording completion"""
         self.is_recording = False
+        # If running headless (no QApplication instance), auto-persist metadata
+        try:
+            from PySide6.QtWidgets import QApplication
+            has_qt_app = QApplication.instance() is not None
+        except Exception:
+            has_qt_app = False
+
+        if not has_qt_app and RecordingService is not None:
+            try:
+                svc = RecordingService()
+                svc.create_from_file(file_path)
+                logger.info("Auto-persisted recording metadata for %s", file_path)
+            except Exception:
+                logger.exception("Failed to auto-persist recording for %s", file_path)
+
+        # Notify listeners
         self.recording_stopped.emit(file_path, duration)
         
         # Clean up thread

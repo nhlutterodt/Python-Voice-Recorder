@@ -22,6 +22,9 @@ from services.file_storage.exceptions import StorageConfigValidationError, FileM
 # Setup logging for this module
 logger = get_logger(__name__)
 
+# Service for persisting recordings to DB when running headless (scripts/tests)
+from services.recording_service import RecordingService
+
 
 class AudioRecorderThread(QThread):
     """Asynchronous audio recorder with real-time monitoring and enhanced storage"""
@@ -482,6 +485,23 @@ class EnhancedAudioRecorderManager(QObject):
     def _on_recording_completed(self, file_path: str, duration: float, metadata: Dict[str, Any]):
         """Handle recording completion with enhanced metadata"""
         self.is_recording = False
+        # If running without a Qt application (headless script/test), persist the
+        # recording metadata automatically so non-GUI callers get a DB row.
+        try:
+            from PySide6.QtWidgets import QApplication
+            has_qt_app = QApplication.instance() is not None
+        except Exception:
+            has_qt_app = False
+
+        if not has_qt_app:
+            try:
+                svc = RecordingService()
+                rec = svc.create_from_file(file_path)
+                logger.info("Auto-created recording in DB (headless): %s", getattr(rec, 'id', None))
+            except Exception:
+                logger.exception("Failed to auto-persist recording metadata for %s", file_path)
+
+        # Emit finished signal for any listeners (GUI or other)
         self.recording_stopped.emit(file_path, duration, metadata)
         
         # Log enhanced metadata
