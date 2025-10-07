@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, TypedDict
 from datetime import datetime
 
+from .exceptions import NotAuthenticatedError, APILibrariesMissingError
+
 # Type checking imports removed - using lazy imports with helper functions instead
 
 # Lazy-import helpers so importing this module doesn't fail when Google libs are missing
@@ -64,10 +66,10 @@ class GoogleDriveManager:
     def _get_service(self) -> Any:
         """Get or create Google Drive service"""
         if not self.auth_manager.is_authenticated():
-            raise RuntimeError("Not authenticated. Please sign in first.")
+            raise NotAuthenticatedError("Not authenticated. Please sign in first.")
 
         if not GOOGLE_APIS_AVAILABLE:
-            raise RuntimeError("Google API libraries not available.")
+            raise APILibrariesMissingError("Google API libraries not available.")
 
         if not self.service:
             credentials = self.auth_manager.get_credentials()
@@ -132,7 +134,7 @@ class GoogleDriveManager:
         try:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"File not found: {file_path}")
-            
+
             service = self._get_service()
             folder_id = self._ensure_recordings_folder()
             
@@ -194,14 +196,21 @@ class GoogleDriveManager:
                 if status:
                     progress = int(status.progress() * 100)
                     logging.info("Upload progress: %d%%", progress)
-            
+
             file_id = response.get('id')
             logging.info("Upload successful. File ID: %s", file_id)
-            
+
             return file_id
-            
+
+        except (NotAuthenticatedError, APILibrariesMissingError) as e:
+            # Preserve backward-compatible behaviour: higher-level callers
+            # in the application expect upload_recording to return None on
+            # failure rather than raise. Log the condition and return None.
+            logging.error("Upload failed due to auth/library issue: %s", e)
+            return None
         except Exception as e:
             logging.error("Upload failed: %s", e)
+            # Preserve previous behaviour of returning None for failures
             return None
     
     def list_recordings(self) -> List[Dict[str, Any]]:

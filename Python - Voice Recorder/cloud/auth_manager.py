@@ -22,6 +22,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Dict, Optional, TYPE_CHECKING
 from urllib.parse import urlparse, parse_qs
+from .exceptions import NotAuthenticatedError, APILibrariesMissingError
 
 # ---- Optional type-only imports to keep runtime clean ------------------------------------------
 if TYPE_CHECKING:  # pragma: no cover
@@ -215,16 +216,16 @@ class GoogleAuthManager:
             raise ValueError("API name and version must be provided")
         
         if not self.is_authenticated():
-            raise RuntimeError("Authentication required: Please authenticate before building services")
+            raise NotAuthenticatedError("Authentication required: Please authenticate before building services")
         # If tests or callers injected a Mock credentials object, treat as "no Google APIs"
         # This makes behavior deterministic in test environments that patch credentials with unittest.mock.Mock
         # Tests commonly inject unittest.mock.Mock / MagicMock objects as credentials.
         # Detect them via duck-typing (presence of mock_calls) and treat as "no Google APIs"
         if self.credentials is not None and hasattr(self.credentials, "mock_calls"):
-            raise RuntimeError("Google APIs client library not available: pip install google-api-python-client")
+            raise APILibrariesMissingError("Google APIs client library not available: pip install google-api-python-client")
 
         if not GOOGLE_APIS_AVAILABLE:
-            raise RuntimeError("Google APIs client library not available: pip install google-api-python-client")
+            raise APILibrariesMissingError("Google APIs client library not available: pip install google-api-python-client")
         
         logger.debug("Building %s v%s service", api, version)
         build = _import_build()

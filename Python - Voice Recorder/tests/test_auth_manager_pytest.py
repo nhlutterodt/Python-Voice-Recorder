@@ -84,9 +84,10 @@ def test_build_service_basic():
     """Test build_service method basic functionality"""
     manager = GoogleAuthManager()
     
-    # Test without authentication - should raise RuntimeError
+    # Test without authentication - should raise NotAuthenticatedError
+    from cloud.exceptions import NotAuthenticatedError, APILibrariesMissingError
     manager.credentials = None
-    with pytest.raises(RuntimeError, match="Authentication required"):
+    with pytest.raises(NotAuthenticatedError):
         manager.build_service("drive", "v3")
     print("✓ Raises error when unauthenticated")
     
@@ -161,7 +162,8 @@ def test_integration_unauthenticated_workflow():
     assert manager.get_user_info() is None
     
     # Try to build service (should raise exception gracefully)
-    with pytest.raises(RuntimeError, match="Authentication required"):
+    from cloud.exceptions import NotAuthenticatedError
+    with pytest.raises(NotAuthenticatedError):
         manager.build_service("drive", "v3")
     print("✓ Build service raises appropriate error when unauthenticated")
     
@@ -198,17 +200,24 @@ def test_error_handling():
     # Test building service with invalid types - integer values are truthy but wrong type
     # The validation logic checks `not api`, so 123 passes as truthy
     # The error will come from the Google API build function itself
-    with pytest.raises((RuntimeError, ValueError, TypeError)):
+    # Depending on environment/build, invalid types may raise ValueError/TypeError
+    # or a runtime error from the underlying client; allow those too but prefer
+    # ValueError/TypeError as the more deterministic outcomes in our code.
+    from cloud.exceptions import APILibrariesMissingError
+    with pytest.raises((ValueError, TypeError, APILibrariesMissingError)):
         manager.build_service(123, "v3")  # type: ignore
     print("✓ Handles non-string service name")
     
-    with pytest.raises((RuntimeError, ValueError, TypeError)):
+    with pytest.raises((ValueError, TypeError, APILibrariesMissingError)):
         manager.build_service("drive", 123)  # type: ignore
     print("✓ Handles non-string version")
     
     # Test with invalid service names (when authenticated)
     # This will now either succeed (if Google APIs are available) or fail differently
-    with pytest.raises((RuntimeError, ValueError)):
+    # Invalid service name may surface different exceptions depending on Google
+    # client availability; accept ValueError or APILibrariesMissingError from downstream.
+    from cloud.exceptions import APILibrariesMissingError
+    with pytest.raises((ValueError, APILibrariesMissingError)):
         manager.build_service("invalid-service", "v3")
     print("✓ Handles invalid service names appropriately")
 
@@ -220,13 +229,14 @@ def test_without_google_apis():
     # Should still initialize
     assert manager is not None
     
-    # Should not be able to build services - should raise RuntimeError about Google APIs
+    # Should not be able to build services - should raise APILibrariesMissingError about Google APIs
     mock_creds = Mock()
     mock_creds.valid = True
     mock_creds.expired = False
     manager.credentials = mock_creds
+    from cloud.exceptions import APILibrariesMissingError
     
-    with pytest.raises(RuntimeError, match="Google APIs client library not available"):
+    with pytest.raises(APILibrariesMissingError):
         manager.build_service("drive", "v3")
     print("✓ Graceful degradation without Google APIs")
 

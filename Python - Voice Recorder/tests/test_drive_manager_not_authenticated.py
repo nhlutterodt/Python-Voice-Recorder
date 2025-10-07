@@ -19,7 +19,8 @@ def test_drive_manager_not_authenticated(monkeypatch: Any, caplog: Any):
     mgr = dm.GoogleDriveManager(StubAuth())
 
     # _get_service should raise a clear auth error first
-    with pytest.raises(RuntimeError, match="Not authenticated. Please sign in first."):
+    from cloud.exceptions import NotAuthenticatedError
+    with pytest.raises(NotAuthenticatedError):
         mgr._get_service()  # type: ignore[attr-defined]
 
     # Higher-level helpers should return safe defaults when not authenticated

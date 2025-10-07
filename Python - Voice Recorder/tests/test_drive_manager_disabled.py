@@ -20,7 +20,8 @@ def test_drive_manager_behaviour_when_google_apis_unavailable(monkeypatch: Any, 
     mgr = dm.GoogleDriveManager(StubAuth())
 
     # _get_service should raise a predictable error
-    with pytest.raises(RuntimeError, match="Google API libraries not available"):
+    from cloud.exceptions import APILibrariesMissingError
+    with pytest.raises(APILibrariesMissingError):
         mgr._get_service()  # type: ignore[attr-defined]  # accessing protected for test coverage
 
     # Methods should fail gracefully and return safe defaults

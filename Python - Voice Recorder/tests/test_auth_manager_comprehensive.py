@@ -26,6 +26,8 @@ from cloud.auth_manager import (
     _restrict_file_permissions
 )
 
+from cloud.exceptions import NotAuthenticatedError, APILibrariesMissingError
+
 
 class TestRunner:
     """Simple test runner that mimics pytest functionality"""
@@ -219,26 +221,25 @@ def test_build_service_validation(runner):
         app_dir = Path(tmp_dir)
         (app_dir / "cloud" / "credentials").mkdir(parents=True)
         (app_dir / "config").mkdir(parents=True)
-        
         mgr = GoogleAuthManager(app_dir=app_dir)
-        
+
         # Test empty/None inputs
         runner.assert_raises(ValueError, mgr.build_service, '', 'v3')
         runner.assert_raises(ValueError, mgr.build_service, 'drive', '')
         runner.assert_raises((ValueError, TypeError), mgr.build_service, None, 'v3')
         runner.assert_raises((ValueError, TypeError), mgr.build_service, 'drive', None)
-        
+
         # Test authentication requirement
-        runner.assert_raises(RuntimeError, mgr.build_service, 'drive', 'v3')
-        
+        runner.assert_raises(NotAuthenticatedError, mgr.build_service, 'drive', 'v3')
+
         # Test with mocked authentication but no Google APIs
         mock_creds = Mock()
         mock_creds.valid = True
         mock_creds.expired = False
         mgr.credentials = mock_creds
-        
+
         # Should still fail because GOOGLE_APIS_AVAILABLE is False in test env
-        runner.assert_raises(RuntimeError, mgr.build_service, 'drive', 'v3')
+        runner.assert_raises(APILibrariesMissingError, mgr.build_service, 'drive', 'v3')
 
 
 def test_logout_functionality(runner):
@@ -349,8 +350,9 @@ def test_integration_unauthenticated_workflow(runner):
         # Should handle logout gracefully
         runner.assert_true(mgr.logout(), "logout should work even when not authenticated")
         
-        # Should fail to build services with appropriate errors
-        runner.assert_raises((ValueError, RuntimeError), mgr.build_service, 'drive', 'v3')
+    # Should fail to build services with appropriate errors
+    # depending on whether inputs are invalid or the user is unauthenticated
+    runner.assert_raises((ValueError, NotAuthenticatedError), mgr.build_service, 'drive', 'v3')
 
 
 def test_module_detection(runner):

@@ -243,7 +243,8 @@ class TestGoogleAuthManager:
     
     def test_build_service_not_authenticated(self, auth_manager):
         """Test build_service when not authenticated"""
-        with pytest.raises(RuntimeError, match="Authentication required"):
+        from cloud.exceptions import NotAuthenticatedError
+        with pytest.raises(NotAuthenticatedError):
             auth_manager.build_service('drive', 'v3')
     
     def test_build_service_no_google_apis(self, auth_manager):
@@ -255,7 +256,8 @@ class TestGoogleAuthManager:
         auth_manager.credentials = mock_creds
         
         # GOOGLE_APIS_AVAILABLE is False in test environment
-        with pytest.raises(RuntimeError, match="Google APIs client library not available"):
+        from cloud.exceptions import APILibrariesMissingError
+        with pytest.raises(APILibrariesMissingError):
             auth_manager.build_service('drive', 'v3')
     
     def test_authenticate_no_google_apis(self, auth_manager):
@@ -343,8 +345,9 @@ class TestIntegration:
             # Should handle logout gracefully
             assert mgr.logout() is True
             
-            # Should fail to build services
-            with pytest.raises((ValueError, RuntimeError)):
+            # Should fail to build services (unauthenticated)
+            from cloud.exceptions import NotAuthenticatedError
+            with pytest.raises(NotAuthenticatedError):
                 mgr.build_service('drive', 'v3')
     
     def test_file_permission_security(self):

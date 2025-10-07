@@ -296,6 +296,49 @@ class CloudUploadWidget(QWidget):
             restriction_msg = self.feature_gate.get_restriction_message('cloud_upload')
             QMessageBox.information(self, "Feature Restricted", restriction_msg or "Feature not available")
             return
+
+        # Ensure user is authenticated before attempting upload. The Drive manager
+        # will raise NotAuthenticatedError if auth is missing but we proactively
+        # check and prompt the user here to provide a better UX.
+        auth_manager = getattr(self.drive_manager, 'auth_manager', None)
+        if auth_manager is None or not auth_manager.is_authenticated():
+            reply = QMessageBox.question(
+                self,
+                "Sign in required",
+                "You must sign in with Google to upload recordings. Sign in now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+            # Run authentication asynchronously to avoid blocking UI
+            self.upload_button.setEnabled(False)
+            self.upload_button.setText("🔄 Signing in...")
+            QTimer.singleShot(100, self.do_auth_and_start_upload)
+            return
+
+    def do_auth_and_start_upload(self):
+        """Perform authentication then continue with upload if successful."""
+        auth_manager = getattr(self.drive_manager, 'auth_manager', None)
+        try:
+            success = False
+            if auth_manager:
+                success = auth_manager.authenticate()
+
+            if success:
+                QMessageBox.information(self, "Authentication Success", "✅ Successfully signed in!")
+                # Proceed with upload now that user is authenticated
+                QTimer.singleShot(100, self.start_upload)
+            else:
+                QMessageBox.warning(self, "Authentication Failed", "❌ Failed to sign in. Upload cancelled.")
+        except Exception as e:
+            QMessageBox.critical(self, "Authentication Error", f"❌ Error: {str(e)}")
+        finally:
+            # Restore upload button state; start_upload will manage actual upload UI
+            self.upload_button.setEnabled(True)
+            self.upload_button.setText("📤 Upload to Google Drive")
         
         # Prepare upload data
         title = self.title_input.text().strip() or None
