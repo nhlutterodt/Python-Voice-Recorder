@@ -117,6 +117,79 @@ def test_cli_no_keyring_with_env_and_dotenv_false(tmp_path, monkeypatch):
     assert DummyEditor.last_instance.use_keyring is False
 
 
+def test_reinit_cloud_components_uses_updated_preference(monkeypatch, tmp_path, qapp):
+    """Ensure that when preferences change and the editor re-initializes cloud
+    components, the new GoogleAuthManager is created with the updated use_keyring.
+    """
+    # Import the module under test
+    ee = importlib.import_module('enhanced_editor')
+    cfg = importlib.import_module('config_manager').config_manager
+
+    # Point config_manager.env_file to temp to avoid touching repo .env
+    monkeypatch.setattr(cfg, 'env_file', tmp_path / '.env')
+
+    # Ensure cloud is considered available
+    monkeypatch.setattr(ee, '_cloud_available', True)
+
+    # Dummy classes to capture use_keyring
+    class DummyAuthManager:
+        last_instance = None
+
+        def __init__(self, use_keyring=True, *a, **kw):
+            DummyAuthManager.last_instance = self
+            self.use_keyring = use_keyring
+
+    class DummyDriveManager:
+        def __init__(self, auth):
+            self.auth = auth
+
+    class DummyFeatureGate:
+        def __init__(self, auth):
+            self.auth = auth
+
+    class DummyCloudUI:
+            def __init__(self, auth, drive, feature_gate):
+                from PySide6.QtWidgets import QWidget
+                QWidget.__init__(self)
+                self.auth = auth
+                self.drive = drive
+                self.feature_gate = feature_gate
+
+    # Patch the cloud classes in enhanced_editor module
+    monkeypatch.setattr(ee, 'GoogleAuthManager', DummyAuthManager)
+    monkeypatch.setattr(ee, 'GoogleDriveManager', DummyDriveManager)
+    monkeypatch.setattr(ee, 'FeatureGate', DummyFeatureGate)
+    monkeypatch.setattr(ee, 'CloudUI', DummyCloudUI)
+
+    # Start with preference True
+    cfg.google_config.use_keyring = True
+
+    # Create an editor instance; it should initialize cloud components with True
+    editor = ee.EnhancedAudioEditor(use_keyring=True)
+    assert DummyAuthManager.last_instance is not None
+    assert DummyAuthManager.last_instance.use_keyring is True
+
+    # Create a dummy SettingsDialog that flips the preference to False when exec() is called
+    class DummySettingsDialog:
+        def __init__(self, parent=None):
+            pass
+
+        def exec(self):
+            # Simulate user toggling setting to False and saving
+            cfg.set_use_keyring(False)
+            return True
+
+    # Patch the dialog used by EnhancedAudioEditor.open_preferences
+    monkeypatch.setattr(ee, 'SettingsDialog', DummySettingsDialog)
+
+    # Call open_preferences which should trigger re-init with the new preference
+    editor.open_preferences()
+
+    # After re-init, the auth manager should have been recreated with use_keyring False
+    assert DummyAuthManager.last_instance is not None
+    assert DummyAuthManager.last_instance.use_keyring is False
+
+
 @pytest.fixture(scope='session')
 def qapp():
     """Provide a headless Qt QApplication for widget tests.
