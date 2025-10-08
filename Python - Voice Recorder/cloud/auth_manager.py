@@ -18,11 +18,14 @@ import sys
 import threading
 import time
 import webbrowser
+import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Dict, Optional, TYPE_CHECKING
 from urllib.parse import urlparse, parse_qs
 from .exceptions import NotAuthenticatedError, APILibrariesMissingError
+from .singleflight import AsyncSingleflight
+import sys
 
 # ---- Optional type-only imports to keep runtime clean ------------------------------------------
 if TYPE_CHECKING:  # pragma: no cover
@@ -151,7 +154,7 @@ class GoogleAuthManager:
         "openid",
     ]
 
-    def __init__(self, app_dir: Optional[Path | str] = None, *, config_manager: Optional[Any] = None, credentials: Optional[Any] = None) -> None:
+    def __init__(self, app_dir: Optional[Path | str] = None, *, config_manager: Optional[Any] = None, credentials: Optional[Any] = None, use_keyring: bool = True) -> None:
         self.app_dir: Path = Path(app_dir) if app_dir else Path(__file__).parent.parent
         self.credentials_dir: Path = self.app_dir / "cloud" / "credentials"
         self.credentials_file: Path = self.credentials_dir / "token.json"
@@ -160,12 +163,27 @@ class GoogleAuthManager:
         # If not provided, config_manager will be resolved lazily in _get_client_config.
         self.config_manager: Optional[Any] = config_manager
 
+        # Allow toggling use of OS keyring for storing credentials. Default is True.
+        # Tests or callers can disable by passing use_keyring=False.
+        self.use_keyring: bool = bool(use_keyring)
+
         self.credentials_dir.mkdir(parents=True, exist_ok=True)
         # Credentials may be injected for DI/testing. Only attempt to auto-load
         # from disk when no credentials were injected.
         self.credentials: Optional[Any] = credentials
         if self.credentials is None:
             self._load_credentials_if_present()
+        # Guard to ensure only one credential refresh happens at a time.
+        self._refresh_lock = threading.Lock()
+        # Event used to coordinate a single in-flight refresh operation.
+        # When not None, it is a threading.Event that waiters can wait() on.
+        # Use simple type comments to avoid runtime issues with annotations.
+        self._refresh_inflight = None  # type: Optional[threading.Event]
+        # If the most recent in-flight refresh failed, the exception is stored here
+        # so waiters can observe the failure.
+        self._refresh_exception = None  # type: Optional[BaseException]
+        # Async singleflight helper for asyncio consumers
+        self._async_singleflight = AsyncSingleflight()
 
     # ---- Public API ---------------------------------------------------------------------------
     def is_authenticated(self) -> bool:
@@ -351,8 +369,39 @@ class GoogleAuthManager:
         return None
 
     def _load_credentials_if_present(self) -> None:
-        if not (GOOGLE_APIS_AVAILABLE and self.credentials_file.exists()):
+        # Try to load credentials from the OS keyring first when enabled. Fall back
+        # to the file-based token.json when keyring is disabled/unavailable.
+        if not GOOGLE_APIS_AVAILABLE:
             return
+
+        # Attempt keyring read first if configured
+        if self.use_keyring:
+            try:
+                import keyring  # type: ignore
+
+                key_name = f"VoiceRecorderPro:credentials:{self.credentials_file.name}"
+                stored = keyring.get_password("VoiceRecorderPro", key_name)
+                if stored:
+                    try:
+                        data = json.loads(stored)
+                        Credentials = _import_credentials()
+                        from_info = getattr(Credentials, "from_authorized_user_info", None)
+                        if from_info:
+                            self.credentials = from_info(data, self.SCOPES)
+                            # Ensure tokens are fresh or refreshed if expired
+                            self._refresh_if_needed()
+                            return
+                    except Exception:
+                        # If parsing or constructing credentials fails, log and fall through
+                        logger.debug("Keyring credential found but failed to load; falling back to file storage")
+            except Exception:
+                # keyring not available or failure; fall back to file-based loading
+                logger.debug("Keyring not available or read failed; falling back to token file if present")
+
+        # Fallback: load from token.json file if present
+        if not self.credentials_file.exists():
+            return
+
         try:
             Credentials = _import_credentials()
             from_file = getattr(Credentials, "from_authorized_user_file", None)
@@ -364,6 +413,7 @@ class GoogleAuthManager:
             self.credentials = None
 
     def _refresh_if_needed(self) -> None:
+        # Quick checks first (fast path): no creds / not expired / no refresh token
         creds = self.credentials
         if not creds:
             return
@@ -371,25 +421,109 @@ class GoogleAuthManager:
             return
         if not getattr(creds, "refresh_token", None):
             return
+
+        # Fast-path: if there's already an in-flight refresh, wait for it to finish
+        with self._refresh_lock:
+            inflight = self._refresh_inflight
+        if inflight is not None:
+            logger.debug("Joining existing in-flight refresh; waiting")
+            inflight.wait()
+            # After waiting, if the inflight refresh recorded an exception, log it
+            if self._refresh_exception is not None:
+                logger.debug("In-flight refresh failed: %s", type(self._refresh_exception))
+                # Propagate the same exception to waiting callers so they can handle it
+                raise self._refresh_exception
+            return
+
+        # No in-flight refresh: become the leader and create the Event
+        with self._refresh_lock:
+            # double-check in case another thread created inflight while acquiring
+            if self._refresh_inflight is not None:
+                inflight = self._refresh_inflight
+        if inflight is not None:
+            inflight.wait()
+            if self._refresh_exception is not None:
+                logger.debug("In-flight refresh failed: %s", type(self._refresh_exception))
+            return
+
+        # Create a new Event and mark as in-flight
+        with self._refresh_lock:
+            self._refresh_inflight = threading.Event()
+            self._refresh_exception = None
+            inflight = self._refresh_inflight
+
         try:
-            Request = _import_request()
-            creds.refresh(Request())
-            self._save_credentials_securely()
-        except Exception as e:  # pragma: no cover
-            logger.error("Error refreshing credentials: %s", e)
+            try:
+                Request = _import_request()
+                creds.refresh(Request())
+                self._save_credentials_securely()
+            except Exception as e:  # pragma: no cover
+                # Store exception so waiters can observe it
+                self._refresh_exception = e
+                logger.error("Error refreshing credentials: %s", e)
+                # Re-raise so the leader caller also observes the failure
+                raise
+        finally:
+            # Notify waiters and clear in-flight under lock
+            try:
+                inflight.set()
+            finally:
+                with self._refresh_lock:
+                    self._refresh_inflight = None
+                    # keep _refresh_exception available for inspection briefly; tests or callers
+                    # may check it immediately after waiting. Optionally we could clear it here.
 
     def _save_credentials_securely(self) -> None:
         try:
             data = getattr(self.credentials, "to_json", None)
             if not (self.credentials and callable(data)):
                 return
+            json_data = self.credentials.to_json()
+
+            # Try to store in OS keyring first (if available)
+            if self.use_keyring:
+                try:
+                    import keyring  # type: ignore
+
+                    try:
+                        key_name = f"VoiceRecorderPro:credentials:{self.credentials_file.name}"
+                        keyring.set_password("VoiceRecorderPro", key_name, json_data)
+                        logger.debug("Stored credentials in OS keyring under %s", key_name)
+                        return
+                    except Exception:
+                        # If keyring fails for any reason, fall back to file storage below
+                        logger.debug("Keyring storage failed, falling back to file storage")
+                except Exception:
+                    # keyring not available; proceed to file-based storage
+                    logger.debug("Keyring module not available; using file-based storage")
+
+            # File-based storage with cross-process locking
             self.credentials_dir.mkdir(parents=True, exist_ok=True)
             tmp = self.credentials_file.with_suffix(".json.tmp")
-            tmp.write_text(self.credentials.to_json(), encoding="utf-8")
-            _restrict_file_permissions(tmp)
-            tmp.replace(self.credentials_file)
+            lockfile = self.credentials_file.with_suffix(".lock")
+            f = _acquire_path_lock_for_write(lockfile)
+            try:
+                tmp.write_text(json_data, encoding="utf-8")
+                _restrict_file_permissions(tmp)
+                tmp.replace(self.credentials_file)
+            finally:
+                _release_path_lock(f)
         except Exception as e:  # pragma: no cover
             logger.error("Error saving credentials: %s", e)
+
+    async def _refresh_if_needed_async(self) -> None:
+        """Async wrapper around _refresh_if_needed for asyncio callers.
+
+        This runs the blocking refresh logic in a thread pool while coordinating
+        concurrent asyncio callers with an AsyncSingleflight instance so only
+        one refresh actually runs.
+        """
+        async def _do_in_thread():
+            # run the blocking method in a thread to avoid blocking the event loop
+            await asyncio.to_thread(self._refresh_if_needed)
+
+        # Use the AsyncSingleflight to ensure only one coroutine runs the inner work
+        await self._async_singleflight.do(lambda: _do_in_thread())
 
 # ---- Helpers ----------------------------------------------------------------------------------
 def _serve_until_result(server: _AuthCallbackServer) -> None:
@@ -413,6 +547,53 @@ def _restrict_file_permissions(path: Path) -> None:
         # On Windows, granular ACLs would require pywin32; we skip here but keep file in user profile.
     except Exception:  # pragma: no cover
         pass
+
+
+def _acquire_path_lock_for_write(path: Path):
+    """Acquire an exclusive lock for a path across processes. Returns an open file object
+    that holds the lock. Caller must call _release_path_lock(fileobj) to release it.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Open target file (create if missing) in append+binary mode so we can lock it
+    f = open(path, "a+b")
+    try:
+        if os.name == "posix":
+            import fcntl  # imported here to keep runtime optional
+
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        else:
+            import msvcrt  # type: ignore
+
+            # Lock the whole file (Windows requires a byte count; we lock 0 bytes starting at 0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+    except Exception:
+        try:
+            f.close()
+        except Exception:
+            pass
+        raise
+    return f
+
+
+def _release_path_lock(fobj) -> None:
+    try:
+        if os.name == "posix":
+            import fcntl
+
+            fcntl.flock(fobj.fileno(), fcntl.LOCK_UN)
+        else:
+            import msvcrt  # type: ignore
+
+            try:
+                msvcrt.locking(fobj.fileno(), msvcrt.LK_UNLCK, 1)
+            except Exception:
+                # Best-effort on Windows; ignore
+                pass
+    finally:
+        try:
+            fobj.close()
+        except Exception:
+            pass
 
 
 def _close_same_process_handles(path: Path) -> None:

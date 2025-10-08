@@ -493,11 +493,12 @@ class CloudUI(QWidget):
 if __name__ == "__main__":
     import sys
     from PySide6.QtWidgets import QApplication
-    
+    from config_manager import config_manager
+
     app = QApplication(sys.argv)
-    
+
     # Initialize managers
-    auth_manager = GoogleAuthManager()
+    auth_manager = GoogleAuthManager(use_keyring=config_manager.prefers_keyring())
     drive_manager = GoogleDriveManager(auth_manager)
     feature_gate = FeatureGate(auth_manager)
     

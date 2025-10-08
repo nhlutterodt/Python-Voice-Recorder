@@ -362,9 +362,10 @@ class GoogleDriveManager:
 # Example usage
 if __name__ == "__main__":
     from cloud.auth_manager import GoogleAuthManager
+    from config_manager import config_manager
     
     # Initialize managers
-    auth_manager = GoogleAuthManager()
+    auth_manager = GoogleAuthManager(use_keyring=config_manager.prefers_keyring())
     drive_manager = GoogleDriveManager(auth_manager)
     
     # Check authentication

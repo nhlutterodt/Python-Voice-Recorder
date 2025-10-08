@@ -13,6 +13,7 @@ from PySide6.QtGui import QCloseEvent
 from pydub import AudioSegment  # type: ignore
 import os
 from typing import Optional, Any  # Union not used
+from config_manager import config_manager
 
 from audio_processing import (
     AudioLoaderThread, 
@@ -25,6 +26,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts', 'utilities'))
 from version import APP_NAME, UIConstants  # type: ignore
 from core.logging_config import get_logger
+from settings_ui import SettingsDialog
 
 # Setup logging for this module
 logger = get_logger(__name__)
@@ -51,7 +53,7 @@ except ImportError as e:
 class EnhancedAudioEditor(QWidget):
     """Enhanced audio editor with asynchronous operations, improved performance, and cloud integration"""
     
-    def __init__(self, feature_gate: Optional[Any] = None) -> None:
+    def __init__(self, feature_gate: Optional[Any] = None, use_keyring: Optional[bool] = None) -> None:
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} - Professional Audio Editing & Cloud Storage")
         self.setMinimumWidth(600)
@@ -89,17 +91,20 @@ class EnhancedAudioEditor(QWidget):
         self.cloud_ui = None  # type: ignore
 
         if _cloud_available:
-            self.init_cloud_components(feature_gate)
+            # Determine effective keyring preference: explicit parameter overrides global config
+            effective_use_keyring = use_keyring if use_keyring is not None else config_manager.prefers_keyring()
+            self.init_cloud_components(feature_gate, use_keyring=effective_use_keyring)
 
         self.init_ui()
         self.connect_signals()
         self.setup_audio_recorder()
     
-    def init_cloud_components(self, feature_gate: Optional[Any] = None) -> None:
+    def init_cloud_components(self, feature_gate: Optional[Any] = None, use_keyring: Optional[bool] = None) -> None:
         """Initialize cloud components if available"""
         try:
             if GoogleAuthManager is not None and GoogleDriveManager is not None and FeatureGate is not None and CloudUI is not None:
-                self.auth_manager = GoogleAuthManager()
+                # Respect caller-specified use_keyring; default to config_manager preference
+                self.auth_manager = GoogleAuthManager(use_keyring=(use_keyring if use_keyring is not None else config_manager.prefers_keyring()))
                 self.drive_manager = GoogleDriveManager(self.auth_manager)
                 self.feature_gate = feature_gate or FeatureGate(self.auth_manager)
                 self.cloud_ui = CloudUI(self.auth_manager, self.drive_manager, self.feature_gate)
@@ -112,24 +117,54 @@ class EnhancedAudioEditor(QWidget):
     def init_ui(self) -> None:
         """Initialize the user interface with tabs for cloud features"""
         main_layout = QVBoxLayout()
-        
+
         # Title and status section
         title_label = QLabel("🎵 Voice Recorder Pro - Professional Edition")
         title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin: 10px;")
-        
+
+        # Preferences button (small)
+        pref_btn = QPushButton("⚙ Preferences")
+        pref_btn.setFixedSize(120, 28)
+        pref_btn.clicked.connect(self.open_preferences)
+
         self.status_label = QLabel("Ready to load audio file...")
         self.status_label.setStyleSheet("color: #7f8c8d; margin: 5px;")
-        
-        main_layout.addWidget(title_label)
+
+        # Title row with preferences button on the right
+        title_row = QHBoxLayout()
+        title_row.addWidget(title_label)
+        title_row.addStretch()
+        title_row.addWidget(pref_btn)
+        main_layout.addLayout(title_row)
         main_layout.addWidget(self.status_label)
-        
+
         # Create tab widget if cloud features available, otherwise single view
         if _cloud_available and self.cloud_ui:
             self.create_tabbed_interface(main_layout)
         else:
             self.create_single_interface(main_layout)
-        
+
         self.setLayout(main_layout)
+
+    def open_preferences(self) -> None:
+        """Open the settings dialog and apply preferences.
+
+        On accept the dialog persists the setting via config_manager.set_use_keyring().
+        We then re-initialize cloud components with the updated preference so it takes
+        effect immediately without restarting the app.
+        """
+        dialog = SettingsDialog(self)
+        result = dialog.exec()
+        if result:
+            try:
+                effective_use_keyring = config_manager.prefers_keyring()
+                # Re-init cloud components with the updated preference
+                if _cloud_available:
+                    self.init_cloud_components(self.feature_gate, use_keyring=effective_use_keyring)
+                self.status_label.setText("Preferences saved.")
+            except Exception as e:
+                logger.exception("Failed to apply preferences: %s", e)
+                QMessageBox.warning(self, "Preferences", "Saved preferences but failed to reinitialize cloud features.")
     
     def create_tabbed_interface(self, main_layout: QVBoxLayout) -> None:
         """Create tabbed interface with cloud features"""

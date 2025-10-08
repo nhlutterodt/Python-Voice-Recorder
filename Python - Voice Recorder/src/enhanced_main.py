@@ -4,6 +4,8 @@
 import sys
 from PySide6.QtWidgets import QApplication
 from enhanced_editor import EnhancedAudioEditor
+from config_manager import config_manager
+import argparse
 from models.database import engine, Base
 from core.logging_config import setup_application_logging
 
@@ -25,6 +27,14 @@ def main():
     
     logger.info("Application properties configured")
     
+    # Parse runtime flags
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--no-keyring", dest="no_keyring", action="store_true", help="Disable OS keyring usage for credentials")
+    args, _ = parser.parse_known_args()
+
+    # Determine keyring preference: CLI overrides config_manager
+    use_keyring = not bool(args.no_keyring) and config_manager.prefers_keyring()
+
     # Create and show main window
     try:
         # Database creation at startup has been disabled so Alembic can manage schema
@@ -35,14 +45,14 @@ def main():
         # except Exception as e:
         #     logger.warning(f"Could not create database tables on startup: {e}")
 
-        window = EnhancedAudioEditor()
+        window = EnhancedAudioEditor(use_keyring=use_keyring)
         window.show()
         logger.info("Main window created and displayed")
-        
+
         # Run the application
         logger.info("Application event loop starting")
         sys.exit(app.exec())
-        
+
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
         sys.exit(1)

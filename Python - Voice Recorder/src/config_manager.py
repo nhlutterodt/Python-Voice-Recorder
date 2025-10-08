@@ -30,6 +30,7 @@ class GoogleCloudConfig:
     project_id: Optional[str] = None
     redirect_uri: str = "http://localhost:8080"
     scopes: str = "https://www.googleapis.com/auth/drive.file"
+    use_keyring: bool = True
 
 @dataclass
 class AppConfig:
@@ -124,7 +125,8 @@ class ConfigManager:
             client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
             project_id=os.getenv("GOOGLE_PROJECT_ID"),
             redirect_uri=os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8080"),
-            scopes=os.getenv("GOOGLE_DRIVE_SCOPES", "https://www.googleapis.com/auth/drive.file")
+            scopes=os.getenv("GOOGLE_DRIVE_SCOPES", "https://www.googleapis.com/auth/drive.file"),
+            use_keyring=os.getenv("USE_KEYRING", "true").lower() == "true",
         )
     
     def get_google_credentials_config(self) -> Optional[Dict[str, Any]]:
@@ -164,6 +166,68 @@ class ConfigManager:
                 logger.warning(f"⚠️ Warning: Could not load client_secrets.json: {e}")
         
         return None
+
+    def prefers_keyring(self) -> bool:
+        """Return whether the configuration prefers using the OS keyring for credentials.
+
+        This can be overridden by the environment variable USE_KEYRING (true/false).
+        """
+        try:
+            return bool(self.google_config.use_keyring)
+        except Exception:
+            return True
+
+    def set_use_keyring(self, enabled: bool) -> None:
+        """Persist the USE_KEYRING preference to the project's .env file and update runtime config.
+
+        This will create or update the USE_KEYRING entry in the .env file located at project root.
+        """
+        val = "true" if bool(enabled) else "false"
+        # Ensure env file directory exists
+        try:
+            # Read existing lines if file exists
+            lines = []
+            if self.env_file.exists():
+                try:
+                    with open(self.env_file, "r", encoding="utf-8") as f:
+                        lines = f.readlines()
+                except Exception:
+                    lines = []
+
+            key = "USE_KEYRING"
+            updated = False
+            new_lines = []
+            for line in lines:
+                if not line.strip() or line.strip().startswith("#"):
+                    new_lines.append(line)
+                    continue
+                if "=" in line:
+                    k, _ = line.split("=", 1)
+                    if k.strip() == key:
+                        new_lines.append(f"{key}={val}\n")
+                        updated = True
+                        continue
+                new_lines.append(line)
+
+            if not updated:
+                new_lines.append(f"{key}={val}\n")
+
+            # Write back atomically
+            try:
+                tmp = self.env_file.with_suffix(".env.tmp")
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.writelines(new_lines)
+                tmp.replace(self.env_file)
+            except Exception:
+                # Best-effort write to env file
+                with open(self.env_file, "w", encoding="utf-8") as f:
+                    f.writelines(new_lines)
+
+            # Update runtime view
+            self.google_config.use_keyring = bool(enabled)
+            os.environ["USE_KEYRING"] = val
+        except Exception as e:
+            logger.error("Failed to persist USE_KEYRING setting: %s", e)
     
     def validate_configuration(self) -> bool:
         """Validate that all required configuration is present"""
