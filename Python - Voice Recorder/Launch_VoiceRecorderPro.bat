@@ -38,7 +38,7 @@ echo 🔧 Starting in Development Mode...
 REM Set project paths
 set "projectRoot=%~dp0"
 set "venvPath=%projectRoot%..\venv\Scripts\python.exe"
-set "mainScript=%projectRoot%src\enhanced_main.py"
+set "mainScript=%projectRoot%src\entrypoint.py"
 
 REM Validate paths
 if not exist "%venvPath%" (
@@ -64,7 +64,7 @@ echo.
 REM Change to project directory and set PYTHONPATH
 cd /d "%projectRoot%"
 set PYTHONPATH=.
-"%venvPath%" src\enhanced_main.py
+"%venvPath%" -m src.entrypoint
 
 if errorlevel 1 (
     echo ❌ Application failed to start

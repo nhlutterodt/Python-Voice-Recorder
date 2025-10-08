@@ -11,9 +11,9 @@ cd Python-Voice-Recorder
 # 2. Run setup script  
 .\Python - Voice Recorder\scripts\setup_local_env.ps1
 
-# 3. Launch application
-cd "Python - Voice Recorder"
-.\Launch_VoiceRecorderPro.bat -dev
+     # 3. Launch application
+     cd "Python - Voice Recorder"
+     .\Launch_VoiceRecorderPro.bat -dev
 ```
 
 ## 🔄 Daily Development Workflow
@@ -39,13 +39,13 @@ cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder"
 
 # Or manual launch for debugging
 $env:PYTHONPATH = "."
-& "..\venv\Scripts\python.exe" src\enhanced_main.py
+& "..\venv\Scripts\python.exe" -m src.entrypoint
 ```
 
 ## 🏗️ Architecture Overview
 
 ### Key Components
-- **`src/enhanced_main.py`** - Application entry point
+- **`src/entrypoint.py`** - Application entry point (use `python -m src.entrypoint`)
 - **`src/enhanced_editor.py`** - Main UI and editor logic
 - **`src/audio_recorder.py`** - Recording functionality  
 - **`src/config_manager.py`** - Configuration management

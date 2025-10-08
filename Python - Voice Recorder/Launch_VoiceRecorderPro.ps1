@@ -30,7 +30,7 @@ if ($Dev) {
     $projectRoot = $PSScriptRoot
     $venvPath = Join-Path $projectRoot "..\venv"
     $pythonExe = Join-Path $venvPath "Scripts\python.exe"
-    $mainScript = Join-Path $projectRoot "src\enhanced_main.py"
+    $mainScript = Join-Path $projectRoot "src\entrypoint.py"
     
     # Validate paths
     if (-not (Test-Path $venvPath)) {
@@ -63,7 +63,7 @@ if ($Dev) {
     # Use cmd to ensure proper working directory and environment handling
     Write-Host "🚀 Launching Voice Recorder Pro from source..." -ForegroundColor Yellow
     
-    $cmd = "cd `"$projectRoot`" && set PYTHONPATH=. && `"$pythonExe`" src\enhanced_main.py"
+        $cmd = "cd `"$projectRoot`" && set PYTHONPATH=. && `"$pythonExe`" -m src.entrypoint"
     
     try {
         cmd /c $cmd

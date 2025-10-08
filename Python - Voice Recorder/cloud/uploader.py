@@ -23,9 +23,10 @@ class Uploader:
     def upload(self,
                file_path: str,
                *,
-               title: Optional[str] = None,
-               description: Optional[str] = None,
-               tags: Optional[list[str]] = None,
-               progress_callback: Optional[Callable[[UploadProgress], None]] = None,
-               cancel_event: Optional[threading.Event] = None) -> UploadResult:
+         title: Optional[str] = None,
+         description: Optional[str] = None,
+         tags: Optional[list[str]] = None,
+         progress_callback: Optional[Callable[[UploadProgress], None]] = None,
+         cancel_event: Optional[threading.Event] = None,
+         force: bool = False) -> UploadResult:
         raise NotImplementedError

@@ -60,15 +60,15 @@ class EnhancedAudioEditor(QWidget):
         self.setMinimumHeight(600)
 
         # Audio-related attributes
-        self.audio_file = None
-        self.audio_segment = None
+        self.audio_file: Optional[str] = None
+        self.audio_segment: Optional[AudioSegment] = None
 
         # Waveform viewer
-        self.waveform_viewer = None
+        self.waveform_viewer: Optional[WaveformViewer] = None
 
         # Audio recorder
         self.audio_recorder = AudioRecorderManager()  # type: ignore
-        self.is_recording = False
+        self.is_recording: bool = False
 
         # Media player setup
         self.player = QMediaPlayer()  # type: ignore
@@ -76,19 +76,19 @@ class EnhancedAudioEditor(QWidget):
         self.player.setAudioOutput(self.output)
 
         # Async processing components
-        self.loader_thread = None  # type: ignore
-        self.trim_processor = None  # type: ignore
-        self.progress_dialog = None  # type: ignore
+        self.loader_thread: Optional[Any] = None
+        self.trim_processor: Optional[Any] = None
+        self.progress_dialog: Optional[Any] = None
 
         # UI state
-        self.is_loading = False
-        self.is_processing = False
+        self.is_loading: bool = False
+        self.is_processing: bool = False
 
         # Cloud components (optional)
-        self.auth_manager = None  # type: ignore
-        self.drive_manager = None  # type: ignore
-        self.feature_gate = None  # type: ignore
-        self.cloud_ui = None  # type: ignore
+        self.auth_manager: Optional[Any] = None
+        self.drive_manager: Optional[Any] = None
+        self.feature_gate: Optional[Any] = None
+        self.cloud_ui: Optional[Any] = None
 
         if _cloud_available:
             # Determine effective keyring preference: explicit parameter overrides global config

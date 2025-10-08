@@ -40,17 +40,22 @@ def test_drive_manager_behaviour_when_google_apis_unavailable(monkeypatch: Any, 
     fd, path = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     try:
-        assert mgr.upload_recording(path) is None
+        uploader = getattr(mgr, 'get_uploader', None)
+        if callable(uploader):
+            # New uploader should raise APILibrariesMissingError when libs disabled
+            with pytest.raises(APILibrariesMissingError):
+                mgr.get_uploader().upload(path)
+        else:
+            assert mgr.upload_recording(path) is None
     finally:
         try:
             os.remove(path)
         except OSError:
             pass
 
-    # Verify expected error logs were emitted
+    # Verify expected error logs were emitted (upload may raise instead of logging)
     messages = [rec.message for rec in caplog.records]
     assert any("Error listing recordings" in m for m in messages)
     assert any("Error getting storage info" in m for m in messages)
     assert any("Download failed" in m for m in messages)
     assert any("Delete failed" in m for m in messages)
-    assert any("Upload failed" in m for m in messages)

@@ -11,7 +11,7 @@ Python - Voice Recorder/
 ├── audio_processing.py              # 📁 Core app files mixed in root
 ├── audio_recorder.py
 ├── enhanced_editor.py
-├── enhanced_main.py
+├── src/entrypoint.py
 ├── config_manager.py
 ├── performance_monitor.py
 ├── init_db.py                       # 📁 Database scripts mixed in root
@@ -33,7 +33,7 @@ Python - Voice Recorder/
 │   ├── audio_processing.py
 │   ├── audio_recorder.py
 │   ├── enhanced_editor.py
-│   ├── enhanced_main.py
+│   ├── src/entrypoint.py
 │   ├── config_manager.py
 │   ├── performance_monitor.py
 │   └── waveform_viewer.py

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, TypedDict
 from datetime import datetime
 
-from .exceptions import NotAuthenticatedError, APILibrariesMissingError
+from .exceptions import NotAuthenticatedError, APILibrariesMissingError, DuplicateFoundError
 
 # Type checking imports removed - using lazy imports with helper functions instead
 
@@ -161,7 +161,8 @@ class GoogleDriveManager:
                 'description': description or f"Audio recording uploaded from Voice Recorder Pro on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             }
             
-            # Add properties for searchability
+            # Add appProperties for searchability and dedupe (use appProperties
+            # which are the recommended field for application-specific metadata)
             properties: Dict[str, str] = {
                 'source': 'Voice Recorder Pro',
                 'upload_date': datetime.now().isoformat(),
@@ -170,8 +171,41 @@ class GoogleDriveManager:
             
             if tags:
                 properties['tags'] = ','.join(tags)
+            # Compute content hash for deduplication/idempotency and include
+            ch = None
+            try:
+                from .dedupe import compute_content_hash
+                ch = compute_content_hash(file_path)
+                if ch:
+                    properties['content_hash'] = ch
+            except Exception:
+                # If hashing fails, continue without blocking upload
+                ch = None
+
+            # Dedupe pre-check: if we have a content hash, look for an existing
+            # file in the recordings folder with the same content_hash property and
+            # return it to avoid creating duplicates.
+            try:
+                if ch:
+                    # Attempt a server-side lookup for a matching content hash.
+                    try:
+                        existing = self.find_duplicate_by_content_hash(ch)
+                        if existing:
+                            # Signal to callers that a duplicate was found so the UI
+                            # may prompt the user whether to reuse or force-upload.
+                            raise DuplicateFoundError(file_id=existing.get('id'), name=existing.get('name'))
+                    except DuplicateFoundError:
+                        # propagate so callers can handle prompt logic
+                        raise
+                    except Exception:
+                        # On any error during lookup, proceed with upload normally
+                        logging.debug('Duplicate lookup failed; continuing with upload')
+            except Exception:
+                # Be conservative: if any of the above fails, proceed with upload
+                pass
             
-            metadata['properties'] = properties
+            # Drive has a dedicated `appProperties` mapping for application metadata
+            metadata['appProperties'] = properties
             
             # Prepare media upload
             media_file_upload, _ = _import_http()
@@ -208,10 +242,42 @@ class GoogleDriveManager:
             # failure rather than raise. Log the condition and return None.
             logging.error("Upload failed due to auth/library issue: %s", e)
             return None
+
+    # Compatibility helper: return Optional[str] like the original API while
+    # delegating to the new adapter-based implementation. This keeps older
+    # callers working while new code should use `get_uploader()` and the
+    # typed `Uploader` contract.
+    def upload_recording_legacy(self, file_path: str, title: Optional[str] = None,
+                                description: Optional[str] = None, tags: Optional[List[str]] = None) -> Optional[str]:
+        try:
+            # Lazy-import the adapter to avoid import-time cycles and keep
+            # runtime behavior identical when cloud libs are missing.
+            from .google_uploader import GoogleDriveUploader
+
+            uploader = GoogleDriveUploader(self)
+            # upload() returns a typed UploadResult or raises on error.
+            try:
+                result = uploader.upload(file_path, title=title, description=description, tags=tags)
+                return result.get('file_id')
+            except DuplicateFoundError as e:
+                # Legacy behavior: log and return existing file id to keep callers
+                logging.info('Duplicate found during legacy upload: %s', getattr(e, 'file_id', None))
+                return getattr(e, 'file_id', None)
         except Exception as e:
-            logging.error("Upload failed: %s", e)
-            # Preserve previous behaviour of returning None for failures
+            logging.error("Legacy upload failed: %s", e)
             return None
+
+    def get_uploader(self):
+        """Return a preconfigured GoogleDriveUploader for this manager.
+
+        Use this in new code to access the typed uploader interface and
+        improved error semantics. This is a convenience method and does
+        a lazy import of the adapter.
+        """
+        from .google_uploader import GoogleDriveUploader
+
+        return GoogleDriveUploader(self)
+        
     
     def list_recordings(self) -> List[Dict[str, Any]]:
         """
@@ -254,6 +320,33 @@ class GoogleDriveManager:
         except Exception as e:
             logging.error("Error listing recordings: %s", e)
             return []
+
+    def find_duplicate_by_content_hash(self, content_hash: str) -> Optional[Dict[str, Any]]:
+        """Find a file in the recordings folder with a matching appProperties.content_hash.
+
+        Returns a dict with keys 'id' and 'name' or None if not found.
+        This implementation lists files in the recordings folder and checks
+        their `appProperties` client-side to avoid complex Drive query syntax.
+        """
+        try:
+            service = self._get_service()
+            folder_id = self._ensure_recordings_folder()
+
+            # List files in folder (page through if necessary) and match by appProperties
+            page_token = None
+            while True:
+                resp = service.files().list(q=f"'{folder_id}' in parents and trashed=false", fields='nextPageToken, files(id, name, appProperties)', pageToken=page_token, pageSize=100).execute()
+                files = resp.get('files', [])
+                for f in files:
+                    props = f.get('appProperties') or {}
+                    if props.get('content_hash') == content_hash:
+                        return {'id': f.get('id'), 'name': f.get('name')}
+                page_token = resp.get('nextPageToken')
+                if not page_token:
+                    break
+        except Exception:
+            logging.debug('Error during duplicate lookup', exc_info=True)
+        return None
     
     def download_recording(self, file_id: str, download_path: str) -> bool:
         """

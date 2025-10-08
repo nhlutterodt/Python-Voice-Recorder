@@ -151,7 +151,7 @@ python scripts/build_voice_recorder_pro.py
 ### Project Structure
 ```
 voice-recorder-pro/
-├── enhanced_main.py          # Main application entry
+├── src/entrypoint.py         # Main application entry (module entrypoint)
 ├── audio_recorder.py         # Core recording engine
 ├── enhanced_editor.py        # Audio editing interface
 ├── audio_processing.py       # Audio processing utilities

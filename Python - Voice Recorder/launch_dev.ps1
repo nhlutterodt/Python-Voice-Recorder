@@ -24,7 +24,7 @@ Write-Host "🚀 Launching application..." -ForegroundColor Yellow
 Write-Host ""
 
 # Use the exact command that worked in our testing
-$launchCmd = "cd `"$projectRoot`" && set PYTHONPATH=. && `"$venvPath`" src\enhanced_main.py"
+$launchCmd = "cd `"$projectRoot`" && set PYTHONPATH=. && `"$venvPath`" -m src.entrypoint"
 
 try {
     cmd /c $launchCmd

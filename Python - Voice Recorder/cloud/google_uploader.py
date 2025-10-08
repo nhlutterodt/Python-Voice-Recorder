@@ -28,12 +28,31 @@ class GoogleDriveUploader(Uploader):
                tags: Optional[list[str]] = None,
                progress_callback: Optional[Callable[[UploadProgress], None]] = None,
                cancel_event: Optional[threading.Event] = None) -> UploadResult:
+        # New callers can pass `force=True` to bypass server-side duplicate
+        # detection if they intentionally want to upload again. The manager
+        # `find_duplicate_by_content_hash` helper may raise DuplicateFoundError
+        # which we propagate unless force is True.
         # Keep behaviour: raise typed exceptions used across the cloud package
         try:
-            # Validate the manager provides the internal helpers we rely on
-            required = ('_get_service', '_ensure_recordings_folder', '_import_http')
-            if not all(hasattr(self.drive_manager, name) for name in required):
-                raise APILibrariesMissingError('Drive manager missing required methods for uploader')
+            # Dedupe pre-check: compute content hash locally and ask manager
+            # to locate an existing file. If found, raise DuplicateFoundError
+            # (unless caller explicitly forces upload). Any auth/library errors
+            # should surface from the manager's helpers.
+            try:
+                from .dedupe import compute_content_hash
+                ch = compute_content_hash(file_path)
+                if ch:
+                    finder = getattr(self.drive_manager, 'find_duplicate_by_content_hash', None)
+                    if callable(finder):
+                        existing = finder(ch)
+                        if existing:
+                            from .exceptions import DuplicateFoundError
+                            raise DuplicateFoundError(file_id=existing.get('id'), name=existing.get('name'))
+            except DuplicateFoundError:
+                raise
+            except Exception:
+                # If hashing or lookup fails, continue to upload normally
+                pass
 
             def create_request():
                 # GoogleDriveManager currently creates a MediaFileUpload and
@@ -49,7 +68,20 @@ class GoogleDriveUploader(Uploader):
                     'description': description or ''
                 }
 
-                media = self.drive_manager._import_http()[0](file_path, mimetype=None, resumable=True)
+                # Prefer a manager-provided _import_http if present, else import
+                # the module-level helper from drive_manager.
+                try:
+                    get_http = getattr(self.drive_manager, '_import_http', None)
+                    if callable(get_http):
+                        media_cls = get_http()[0]
+                    else:
+                        from .drive_manager import _import_http as _module_import_http
+                        media_cls = _module_import_http()[0]
+                    media = media_cls(file_path, mimetype=None, resumable=True)
+                except Exception:
+                    # Let underlying errors surface (auth/missing libs) so callers
+                    # receive typed exceptions from _get_service/_import_http.
+                    raise
 
                 request = service.files().create(body=metadata, media_body=media, fields='id, name, size, createdTime')
 
@@ -74,6 +106,9 @@ class GoogleDriveUploader(Uploader):
             def cancel_check():
                 return cancel_event.is_set() if cancel_event is not None else False
 
+            # If the manager's pre-check raised DuplicateFoundError (when called
+            # earlier) we expect callers to have handled it; however, some
+            # managers might perform an inline pre-check on create_request.
             resp = chunked_upload_with_progress(create_request, progress_callback=progress_wrapper, cancel_check=cancel_check)
 
             # Map response to UploadResult

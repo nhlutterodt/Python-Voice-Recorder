@@ -396,7 +396,7 @@ function Write-ReleaseSummary {
     Write-Host "🔗 Quick Actions:" -ForegroundColor Yellow
     Write-Host "  📁 Open destination: explorer `"$DestinationPath`""
     Write-Host "  📋 View README: Get-Content `"$DestinationPath\README.md`""
-    Write-Host "  🚀 Run application: cd `"$DestinationPath`" && python enhanced_main.py"
+    Write-Host "  🚀 Run application: cd `"$DestinationPath`" && python -m src.entrypoint"
     
     Write-Host ""
     Write-Success "Release successfully created with enterprise-grade safety validation!"

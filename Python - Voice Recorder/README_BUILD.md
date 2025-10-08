@@ -44,7 +44,7 @@ Set-Location "<repo-root>\Python - Voice Recorder"
 ```powershell
 Set-Location "<repo-root>\Python - Voice Recorder"
 $env:PYTHONPATH = "."
-"<repo-root>\venv\Scripts\python.exe" src\enhanced_main.py
+"<repo-root>\venv\Scripts\python.exe" -m src.entrypoint
 ```
 
 - Notes and common gotchas:

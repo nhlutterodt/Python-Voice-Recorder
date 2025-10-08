@@ -5,7 +5,7 @@
 ### Application Won't Start
 ```cmd
 # The command that always works:
-cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder" && set PYTHONPATH=. && "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\venv\Scripts\python.exe" src\enhanced_main.py
+cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder" && set PYTHONPATH=. && "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\venv\Scripts\python.exe" -m src.entrypoint
 ```
 
 ### Setup Issues
@@ -26,7 +26,7 @@ cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder"
 1. Ensure working directory is `Python - Voice Recorder/`
 2. Set `PYTHONPATH=.`
 
-### Error: `python.exe: can't open file 'enhanced_main.py'`
+### Error: `python.exe: can't open file 'src/entrypoint.py'`
 **Cause:** Wrong working directory
 **Fix:** Must be in `Python - Voice Recorder/` directory, not repository root
 
@@ -54,7 +54,7 @@ Test-Path "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\venv\Scripts\pyth
 
 ### Check Project Structure
 ```powershell
-Get-ChildItem "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\src\enhanced_main.py"
+Get-ChildItem "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\src\entrypoint.py"
 # Should show the file exists
 ```
 
@@ -80,7 +80,7 @@ Start Here: Need to launch Voice Recorder Pro
 - [ ] Virtual environment exists at correct path
 - [ ] Python executable works: `python.exe -c "print('test')"`
 - [ ] Dependencies installed: Can import PySide6, pydub, sounddevice
-- [ ] Project files exist: enhanced_main.py found
+- [ ] Project files exist: src/entrypoint.py found
 - [ ] Working directory correct: Must be `Python - Voice Recorder/`
 - [ ] PYTHONPATH set: Must be `.` (current directory)
 

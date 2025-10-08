@@ -6,7 +6,7 @@
 
 ### The Working Command Pattern
 ```cmd
-cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder" && set PYTHONPATH=. && "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\venv\Scripts\python.exe" src\enhanced_main.py
+cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder" && set PYTHONPATH=. && "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\venv\Scripts\python.exe" -m src.entrypoint
 ```
 
 This command ALWAYS works because:
@@ -44,14 +44,14 @@ cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder"
 
 ### Method 2: Direct Command (For Debugging)
 ```cmd
-cmd /c 'cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder" && set PYTHONPATH=. && "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\venv\Scripts\python.exe" src\enhanced_main.py'
+cmd /c 'cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder" && set PYTHONPATH=. && "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\venv\Scripts\python.exe" -m src.entrypoint'
 ```
 ✅ Always works, full control
 
 ### Method 3: PowerShell (Advanced)
 ```powershell
 # Must bypass execution policy and set paths carefully
-powershell -ExecutionPolicy Bypass -Command "cd 'C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder'; `$env:PYTHONPATH='.'; & 'C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\venv\Scripts\python.exe' src\enhanced_main.py"
+powershell -ExecutionPolicy Bypass -Command "cd 'C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder'; `$env:PYTHONPATH='.'; & 'C:\Users\Owner\Voice-Recorder\Python-Voice-Recorder\venv\Scripts\python.exe' -m src.entrypoint"
 ```
 
 ## 🚨 Common Pitfalls for AI Agents
@@ -100,7 +100,7 @@ Python-Voice-Recorder/                    # Git repository root
 │   └── Scripts/python.exe               # The Python to use
 ├── Python - Voice Recorder/             # Project root (note the space!)
 │   ├── src/
-│   │   ├── enhanced_main.py            # Main entry point
+│   │   ├── entrypoint.py               # Main entry point (use `python -m src.entrypoint`)
 │   │   ├── enhanced_editor.py          # Main UI
 │   │   └── config_manager.py           # Configuration
 │   ├── core/                           # Core modules

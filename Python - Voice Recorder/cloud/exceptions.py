@@ -31,3 +31,16 @@ class FeatureNotAllowedError(CloudError):
 class UploadError(CloudError):
     """Generic upload error; used when an upload fails for reasons other than auth or missing libs."""
     pass
+
+
+class DuplicateFoundError(CloudError):
+    """Raised when a pre-upload dedupe check finds an existing file with the same content.
+
+    Attributes:
+        file_id: the Drive file id that was found
+        name: the file name on Drive (if available)
+    """
+    def __init__(self, file_id: str | None = None, name: str | None = None, *args: object) -> None:
+        super().__init__(*args)
+        self.file_id = file_id
+        self.name = name

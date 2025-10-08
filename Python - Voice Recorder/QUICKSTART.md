@@ -29,7 +29,7 @@ cd "Python - Voice Recorder"
 ```powershell
 cd "Python - Voice Recorder"
 $env:PYTHONPATH = "."
-& "..\venv\Scripts\python.exe" src\enhanced_main.py
+& "..\venv\Scripts\python.exe" -m src.entrypoint
 ```
 
 ## ⚠️ Common Issues & Solutions
@@ -47,7 +47,7 @@ $env:PYTHONPATH = "."
 
 This command was successfully tested and launches the application:
 ```cmd
-cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder" && set PYTHONPATH=. && "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\venv\Scripts\python.exe" src\enhanced_main.py
+cd "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder" && set PYTHONPATH=. && "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\venv\Scripts\python.exe" -m src.entrypoint
 ```
 
 ## 🔑 Key Success Factors

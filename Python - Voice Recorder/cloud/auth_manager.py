@@ -388,7 +388,24 @@ class GoogleAuthManager:
         if not GOOGLE_APIS_AVAILABLE:
             return
 
-        # Attempt keyring read first if configured
+        # Prefer loading from the local token file in the app credentials dir.
+        # This avoids inadvertently loading developer keyring credentials when
+        # running tests or when the app_dir is a repository checkout.
+        if self.credentials_file.exists():
+            try:
+                Credentials = _import_credentials()
+                from_file = getattr(Credentials, "from_authorized_user_file", None)
+                if from_file:
+                    self.credentials = from_file(str(self.credentials_file), self.SCOPES)
+                    self._refresh_if_needed()
+                    return
+            except Exception as e:  # pragma: no cover
+                logger.error("Error loading credentials from token file: %s", e)
+                self.credentials = None
+
+        # If no credentials file was present or loading failed, try keyring as
+        # a fallback when explicitly enabled. Keyring may contain system-wide
+        # credentials which we prefer not to surface automatically for test runs.
         if self.use_keyring:
             try:
                 import keyring  # type: ignore
@@ -407,24 +424,10 @@ class GoogleAuthManager:
                             return
                     except Exception:
                         # If parsing or constructing credentials fails, log and fall through
-                        logger.debug("Keyring credential found but failed to load; falling back to file storage")
+                        logger.debug("Keyring credential found but failed to load; giving up")
             except Exception:
-                # keyring not available or failure; fall back to file-based loading
-                logger.debug("Keyring not available or read failed; falling back to token file if present")
-
-        # Fallback: load from token.json file if present
-        if not self.credentials_file.exists():
-            return
-
-        try:
-            Credentials = _import_credentials()
-            from_file = getattr(Credentials, "from_authorized_user_file", None)
-            if from_file:
-                self.credentials = from_file(str(self.credentials_file), self.SCOPES)
-                self._refresh_if_needed()
-        except Exception as e:  # pragma: no cover
-            logger.error("Error loading credentials: %s", e)
-            self.credentials = None
+                # keyring not available or failure; nothing more to do
+                logger.debug("Keyring not available or read failed; skipping keyring read")
 
     def _refresh_if_needed(self) -> None:
         # Quick checks first (fast path): no creds / not expired / no refresh token

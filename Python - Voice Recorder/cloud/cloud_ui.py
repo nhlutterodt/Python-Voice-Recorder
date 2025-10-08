@@ -20,11 +20,18 @@ from .drive_manager import GoogleDriveManager
 from .feature_gate import FeatureGate
 
 class CloudUploadThread(QThread):
-    """Background thread for cloud uploads"""
-    
+    """Background thread for cloud uploads using the new Uploader interface.
+
+    This thread calls drive_manager.get_uploader().upload(...) so new code
+    uses the typed contract and exceptions. For legacy callers we still
+    support a fallback via drive_manager.upload_recording_legacy when
+    the manager doesn't expose `get_uploader()`.
+    """
+
     progress_updated = Signal(int)  # Progress percentage
     upload_finished = Signal(bool, str)  # Success, message
-    
+    duplicate_detected = Signal(str, str)  # file_id, name
+
     def __init__(self, drive_manager: 'GoogleDriveManager', file_path: str, title: str | None = None, description: str | None = None, tags: list[str] | None = None):
         super().__init__()
         self.drive_manager = drive_manager
@@ -32,26 +39,94 @@ class CloudUploadThread(QThread):
         self.title = title
         self.description = description
         self.tags = tags
-    
+        self._cancel_event = None
+
     def run(self):
-        """Execute upload in background"""
+        """Execute upload in background using Uploader or legacy shim."""
         try:
-            # Simulate progress updates (Google API doesn't provide real-time progress)
-            for i in range(0, 101, 10):
-                self.progress_updated.emit(i)
-                self.msleep(200)  # Simulate work
-            
-            file_id = self.drive_manager.upload_recording(
-                self.file_path, self.title, self.description, self.tags
-            )
-            
+            # Try to obtain a typed uploader from the manager if available
+            uploader = None
+            try:
+                uploader = getattr(self.drive_manager, 'get_uploader', None)
+                if callable(uploader):
+                    uploader = self.drive_manager.get_uploader()
+                else:
+                    uploader = None
+            except Exception:
+                uploader = None
+
+            # Prepare cancel event for long-running uploads
+            import threading
+            cancel_event = threading.Event()
+            self._cancel_event = cancel_event
+
+            def progress_cb(progress_dict: dict):
+                try:
+                    pct = progress_dict.get('percent')
+                    if pct is None and progress_dict.get('total_bytes'):
+                        total = progress_dict.get('total_bytes')
+                        uploaded = progress_dict.get('uploaded_bytes', 0)
+                        pct = int(uploaded * 100 / total) if total else 0
+                    if pct is None:
+                        pct = 0
+                    self.progress_updated.emit(int(pct))
+                except Exception:
+                    # Swallow progress callback errors; don't crash the thread
+                    pass
+
+            if uploader is not None:
+                # Use the new uploader interface which raises typed exceptions
+                try:
+                    result = uploader.upload(
+                        self.file_path,
+                        title=self.title,
+                        description=self.description,
+                        tags=self.tags,
+                        progress_callback=progress_cb,
+                        cancel_event=cancel_event,
+                    )
+                except Exception as e:
+                    # Detect duplicate and emit a specific signal so the UI can prompt
+                    try:
+                        from .exceptions import DuplicateFoundError
+                        if isinstance(e, DuplicateFoundError):
+                            self.duplicate_detected.emit(getattr(e, 'file_id', ''), getattr(e, 'name', ''))
+                            return
+                    except Exception:
+                        pass
+                    raise
+
+                file_id = result.get('file_id') if result else None
+
+            else:
+                # Fallback to legacy behaviour for older managers
+                try:
+                    file_id = self.drive_manager.upload_recording_legacy(
+                        self.file_path, title=self.title, description=self.description, tags=self.tags
+                    )
+                except Exception:
+                    file_id = None
+
             if file_id:
                 self.upload_finished.emit(True, f"✅ Upload successful! File ID: {file_id}")
             else:
                 self.upload_finished.emit(False, "❌ Upload failed. Please try again.")
-                
+
         except Exception as e:
-            self.upload_finished.emit(False, f"❌ Upload error: {str(e)}")
+            # Surface typed exceptions' messages to the UI
+            try:
+                self.upload_finished.emit(False, f"❌ Upload error: {str(e)}")
+            except Exception:
+                # Last-resort: log nothing to avoid raising from thread
+                pass
+
+    def cancel(self) -> None:
+        """Signal cancellation to the running upload if one is active."""
+        try:
+            if self._cancel_event is not None:
+                self._cancel_event.set()
+        except Exception:
+            pass
 
 class CloudAuthWidget(QWidget):
     """Authentication section for cloud features"""
@@ -261,6 +336,18 @@ class CloudUploadWidget(QWidget):
         self.upload_button.clicked.connect(self.start_upload)
         self.upload_button.setEnabled(False)
         layout.addWidget(self.upload_button)
+
+        # Jobs button to view background upload jobs
+        from .job_dialog import JobDialog
+        self.jobs_button = QPushButton("Jobs...")
+        self.jobs_button.clicked.connect(lambda: JobDialog(self).exec())
+        layout.addWidget(self.jobs_button)
+
+        # Cancel upload button (hidden until upload starts)
+        self.cancel_button = QPushButton("✖ Cancel")
+        self.cancel_button.clicked.connect(self.on_cancel_clicked)
+        self.cancel_button.hide()
+        layout.addWidget(self.cancel_button)
         
         self.setLayout(layout)
     
@@ -352,6 +439,11 @@ class CloudUploadWidget(QWidget):
         )
         self.upload_thread.progress_updated.connect(self.update_progress)
         self.upload_thread.upload_finished.connect(self.upload_finished)
+        self.upload_thread.duplicate_detected.connect(self.on_duplicate_detected)
+
+        # Expose cancel button
+        self.cancel_button.show()
+        self.cancel_button.setEnabled(True)
         
         # Update UI for upload state
         self.upload_button.setEnabled(False)
@@ -360,6 +452,51 @@ class CloudUploadWidget(QWidget):
         self.progress_bar.setValue(0)
         
         self.upload_thread.start()
+
+    def on_duplicate_detected(self, file_id: str, name: str) -> None:
+        """Prompt user when a duplicate is detected during upload."""
+        reply = QMessageBox.question(
+            self,
+            "Duplicate Found",
+            f"A file named '{name or 'unknown'}' already exists in Drive (ID: {file_id}).\n\nDo you want to open the existing file in browser instead of uploading?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes,
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            # Open browser to the file's Drive URL if possible
+            import webbrowser
+            webbrowser.open(f"https://drive.google.com/file/d/{file_id}/view")
+            self.upload_finished(True, f"Opened existing file: {file_id}")
+        elif reply == QMessageBox.StandardButton.No:
+            # User chose to force upload: restart upload with force flag via job queue
+            try:
+                from .job_queue_sql import enqueue_job, JobRow
+                import uuid
+                job = JobRow(id=str(uuid.uuid4()), file_path=self.current_file_path, title=self.title_input.text() or None, description=self.description_input.toPlainText() or None, tags=[t.strip() for t in (self.tags_input.text() or '').split(',') if t.strip()])
+                enqueue_job(job)
+                QMessageBox.information(self, "Queued", "Upload has been queued and will be retried.")
+                self.upload_finished(True, "Upload queued")
+            except Exception as e:
+                QMessageBox.warning(self, "Queue Error", f"Failed to enqueue upload: {e}")
+        else:
+            # Cancelled by user
+            self.upload_finished(False, "Upload cancelled by user due to duplicate")
+
+    def on_show_jobs_clicked(self):
+        """Show a simple job status dialog listing recent jobs."""
+        try:
+            from .job_queue_sql import get_all_jobs
+            jobs = get_all_jobs()
+            lines = []
+            for j in jobs[:50]:
+                lines.append(f"{j.id[:8]}  {j.status}  attempts={j.attempts}/{j.max_attempts}  {j.file_path}")
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Upload Jobs")
+            dlg.setText("\n".join(lines) or "No jobs found")
+            dlg.exec()
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to list jobs: {e}")
     
     def update_progress(self, percentage: int) -> None:
         """Update upload progress"""
@@ -370,6 +507,12 @@ class CloudUploadWidget(QWidget):
         self.upload_button.setEnabled(True)
         self.upload_button.setText("📤 Upload to Google Drive")
         self.progress_bar.hide()
+        # Hide/disable cancel button
+        try:
+            self.cancel_button.hide()
+            self.cancel_button.setEnabled(False)
+        except Exception:
+            pass
         
         if success:
             QMessageBox.information(self, "Upload Complete", message)
@@ -398,6 +541,16 @@ class CloudUploadWidget(QWidget):
             # Auto-fill title
             name_without_ext = os.path.splitext(file_name)[0]
             self.title_input.setText(name_without_ext)
+
+    def on_cancel_clicked(self):
+        """Called when user clicks Cancel; signal the upload thread to cancel."""
+        if self.upload_thread and hasattr(self.upload_thread, 'cancel'):
+            try:
+                self.upload_thread.cancel()
+                self.cancel_button.setEnabled(False)
+                self.progress_bar.setFormat('Cancelling...')
+            except Exception:
+                pass
 
 class CloudUI(QWidget):
     """Main cloud features UI container"""

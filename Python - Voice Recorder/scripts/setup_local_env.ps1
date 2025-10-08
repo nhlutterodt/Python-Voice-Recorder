@@ -98,7 +98,7 @@ Write-Host "Option 2 - Manual Launch:" -ForegroundColor Cyan
 Write-Host "  .\venv\Scripts\Activate.ps1" -ForegroundColor White
 Write-Host "  cd \"$ProjectSubdir\"" -ForegroundColor White
 Write-Host '  $env:PYTHONPATH = "."' -ForegroundColor White
-Write-Host "  python src\enhanced_main.py" -ForegroundColor White
+Write-Host "  python -m src.entrypoint" -ForegroundColor White
 Write-Host ""
 Write-Host "Option 3 - Batch File (Windows):" -ForegroundColor Cyan
 Write-Host "  cd \"$ProjectSubdir\"" -ForegroundColor White

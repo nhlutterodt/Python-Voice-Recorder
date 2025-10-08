@@ -30,11 +30,17 @@ def test_drive_manager_not_authenticated(monkeypatch: Any, caplog: Any):
     assert mgr.download_recording("id", os.path.join(os.getcwd(), "out.dat")) is False
     assert mgr.delete_recording("id") is False
 
-    # upload_recording should return None; ensure file exists to pass existence check
+    # Using the new uploader interface should raise NotAuthenticatedError when not signed in
     fd, path = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     try:
-        assert mgr.upload_recording(path) is None
+        uploader = getattr(mgr, 'get_uploader', None)
+        if callable(uploader):
+            with pytest.raises(NotAuthenticatedError):
+                mgr.get_uploader().upload(path)
+        else:
+            # Fallback to legacy behaviour
+            assert mgr.upload_recording(path) is None
     finally:
         try:
             os.remove(path)

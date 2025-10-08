@@ -50,7 +50,7 @@ cd Python---Voice-Recorder
 pip install -r requirements.txt
 
 # Launch the application
-python enhanced_main.py
+python -m src.entrypoint
 ```
 
 ### Optional: Cloud Features
@@ -94,7 +94,7 @@ cd ".\Python - Voice Recorder"
 .\venv\Scripts\Activate.ps1
 cd ".\Python - Voice Recorder"
 $env:PYTHONPATH = "."
-python src\enhanced_main.py
+python -m src.entrypoint
 ```
 
 **🔑 Key Requirements for Manual Launch:**
@@ -192,7 +192,7 @@ python scripts/build_voice_recorder_pro.py
 ### Project Structure
 ```
 voice-recorder-pro/
-├── enhanced_main.py          # Main application entry
+├── src/entrypoint.py         # Main application entry (use `python -m src.entrypoint`)
 ├── audio_recorder.py         # Core recording engine
 ├── enhanced_editor.py        # Audio editing interface
 ├── audio_processing.py       # Audio processing utilities

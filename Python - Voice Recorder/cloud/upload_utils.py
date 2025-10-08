@@ -76,11 +76,11 @@ def _normalize_progress(status: _StatusLike, total_bytes: Optional[int]) -> int:
     Prefer a progress() method, falling back to status.uploaded attribute.
     """
     try:
-        if isinstance(status, _HasProgress):
-            p = status.progress()  # type: ignore[call-arg]
-            if isinstance(p, float) and total_bytes is not None:
-                return max(0, min(total_bytes, int(p * total_bytes)))
-            return int(p)
+        # Try calling progress() if available; allow it to raise/attribute error.
+        p = status.progress()  # type: ignore[call-arg]
+        if isinstance(p, float) and total_bytes is not None:
+            return max(0, min(total_bytes, int(p * total_bytes)))
+        return int(p)
     except Exception:
         # fall through to attribute fallback
         pass
@@ -105,9 +105,7 @@ def _single_request_upload(
     total_bytes: Optional[int] = None
 
     while response is None:
-        if cancel_check and cancel_check():
-            logger.info("Upload cancelled by caller")
-            raise RuntimeError("upload_cancelled")
+        _check_and_handle_cancel(cancel_check)
 
         status, response = req.next_chunk()
 
@@ -115,18 +113,25 @@ def _single_request_upload(
             total_bytes = _discover_total_bytes(status, req)
 
         if status and progress_callback:
-            uploaded = _normalize_progress(status, total_bytes)
-            try:
-                progress_callback(uploaded, total_bytes)
-            except Exception:
-                logger.debug("Progress callback raised; ignoring.", exc_info=True)
+            _handle_progress(status, total_bytes, progress_callback)
 
     return response
 
 
-@runtime_checkable
-class _HasProgress(Protocol):
-    def progress(self) -> float | int: ...
+def _check_and_handle_cancel(cancel_check: Optional[Callable[[], bool]]):
+    """Raise RuntimeError if cancel_check signals cancellation."""
+    if cancel_check and cancel_check():
+        logger.info("Upload cancelled by caller")
+        raise RuntimeError("upload_cancelled")
+
+
+def _handle_progress(status: _StatusLike, total_bytes: Optional[int], progress_callback: Callable[[int, Optional[int]], None]):
+    """Normalize status and call the progress callback, swallowing callback errors."""
+    uploaded = _normalize_progress(status, total_bytes)
+    try:
+        progress_callback(uploaded, total_bytes)
+    except Exception:
+        logger.debug("Progress callback raised; ignoring.", exc_info=True)
 
 
 @runtime_checkable

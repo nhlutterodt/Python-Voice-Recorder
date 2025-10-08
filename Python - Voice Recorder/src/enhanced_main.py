@@ -8,6 +8,27 @@ from config_manager import config_manager
 import argparse
 from models.database import engine, Base
 from core.logging_config import setup_application_logging
+from typing import Optional, Any
+import threading
+
+# Import the job supervisor lazily to avoid import-time side effects
+def start_job_worker(drive_manager: Any) -> Optional[threading.Thread]:
+    """Start the cloud job worker supervisor if enabled in configuration.
+
+    Returns the supervisor Thread object or None. This helper is safe to call
+    from the application bootstrap after managers are available.
+    """
+    try:
+        if getattr(config_manager, 'enable_cloud_job_worker', False):
+            from cloud.job_queue_sql import run_worker_with_supervisor
+            db_path = getattr(config_manager, 'cloud_jobs_db_path', None)
+            try:
+                return run_worker_with_supervisor(drive_manager, db_path=db_path)
+            except Exception as e:
+                logger.warning(f"Failed to start cloud job supervisor: {e}")
+    except Exception:
+        logger.debug("Cloud job supervisor not started (config missing or error)")
+    return None
 
 # Setup application-wide logging
 logger = setup_application_logging("INFO")
