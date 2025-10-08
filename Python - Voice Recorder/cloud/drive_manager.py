@@ -118,7 +118,8 @@ class GoogleDriveManager:
             raise
     
     def upload_recording(self, file_path: str, title: Optional[str] = None,
-                         description: Optional[str] = None, tags: Optional[List[str]] = None) -> Optional[str]:
+                         description: Optional[str] = None, tags: Optional[List[str]] = None,
+                         force: bool = False) -> Optional[str]:
         """
         Upload an audio recording to Google Drive
         
@@ -135,6 +136,33 @@ class GoogleDriveManager:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"File not found: {file_path}")
 
+            # Compute SHA-256 content hash early (content_sha256) and attempt a server-side lookup
+            # before creating Drive service objects. If a duplicate is found
+            # return the existing file id immediately so callers (including
+            # legacy code) receive the id instead of creating a duplicate.
+            ch = None
+            try:
+                from .dedupe import compute_content_sha256
+                ch = compute_content_sha256(file_path)
+            except Exception:
+                ch = None
+
+            if ch:
+                try:
+                    finder = getattr(self, 'find_duplicate_by_content_sha256', None)
+                    if callable(finder):
+                        existing = finder(ch)
+                        if existing:
+                            # If caller explicitly requested a forced upload, bypass dedupe
+                            if force:
+                                logging.info('Force upload requested; bypassing duplicate check for file %s', file_path)
+                            else:
+                                # Return the existing file id to avoid duplicating uploads
+                                return existing.get('id')
+                except Exception:
+                    # If lookup fails, continue with the upload path below
+                    logging.debug('Duplicate lookup failed; continuing with upload')
+
             service = self._get_service()
             folder_id = self._ensure_recordings_folder()
             
@@ -148,64 +176,17 @@ class GoogleDriveManager:
             if not mime_type:
                 mime_type = 'audio/wav'  # Default for audio files
             
-            # Create metadata
-            class FileCreateMetadata(TypedDict, total=False):
-                name: str
-                parents: List[str]
-                description: str
-                properties: Dict[str, str]
+            # Build canonical metadata including appProperties using a shared helper
+            from .metadata_schema import build_upload_metadata
 
-            metadata: FileCreateMetadata = {
-                'name': file_title,
-                'parents': [folder_id],
-                'description': description or f"Audio recording uploaded from Voice Recorder Pro on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            }
-            
-            # Add appProperties for searchability and dedupe (use appProperties
-            # which are the recommended field for application-specific metadata)
-            properties: Dict[str, str] = {
-                'source': 'Voice Recorder Pro',
-                'upload_date': datetime.now().isoformat(),
-                'file_size': str(file_size)
-            }
-            
-            if tags:
-                properties['tags'] = ','.join(tags)
-            # Compute content hash for deduplication/idempotency and include
-            ch = None
-            try:
-                from .dedupe import compute_content_hash
-                ch = compute_content_hash(file_path)
-                if ch:
-                    properties['content_hash'] = ch
-            except Exception:
-                # If hashing fails, continue without blocking upload
-                ch = None
-
-            # Dedupe pre-check: if we have a content hash, look for an existing
-            # file in the recordings folder with the same content_hash property and
-            # return it to avoid creating duplicates.
-            try:
-                if ch:
-                    # Attempt a server-side lookup for a matching content hash.
-                    try:
-                        existing = self.find_duplicate_by_content_hash(ch)
-                        if existing:
-                            # Signal to callers that a duplicate was found so the UI
-                            # may prompt the user whether to reuse or force-upload.
-                            raise DuplicateFoundError(file_id=existing.get('id'), name=existing.get('name'))
-                    except DuplicateFoundError:
-                        # propagate so callers can handle prompt logic
-                        raise
-                    except Exception:
-                        # On any error during lookup, proceed with upload normally
-                        logging.debug('Duplicate lookup failed; continuing with upload')
-            except Exception:
-                # Be conservative: if any of the above fails, proceed with upload
-                pass
-            
-            # Drive has a dedicated `appProperties` mapping for application metadata
-            metadata['appProperties'] = properties
+            metadata = build_upload_metadata(
+                file_path,
+                title=file_title,
+                description=description,
+                tags=tags,
+                content_sha256=ch,
+                folder_id=folder_id,
+            )
             
             # Prepare media upload
             media_file_upload, _ = _import_http()
@@ -248,7 +229,8 @@ class GoogleDriveManager:
     # callers working while new code should use `get_uploader()` and the
     # typed `Uploader` contract.
     def upload_recording_legacy(self, file_path: str, title: Optional[str] = None,
-                                description: Optional[str] = None, tags: Optional[List[str]] = None) -> Optional[str]:
+                                description: Optional[str] = None, tags: Optional[List[str]] = None,
+                                force: bool = False) -> Optional[str]:
         try:
             # Lazy-import the adapter to avoid import-time cycles and keep
             # runtime behavior identical when cloud libs are missing.
@@ -257,7 +239,7 @@ class GoogleDriveManager:
             uploader = GoogleDriveUploader(self)
             # upload() returns a typed UploadResult or raises on error.
             try:
-                result = uploader.upload(file_path, title=title, description=description, tags=tags)
+                result = uploader.upload(file_path, title=title, description=description, tags=tags, force=force)
                 return result.get('file_id')
             except DuplicateFoundError as e:
                 # Legacy behavior: log and return existing file id to keep callers
@@ -321,8 +303,8 @@ class GoogleDriveManager:
             logging.error("Error listing recordings: %s", e)
             return []
 
-    def find_duplicate_by_content_hash(self, content_hash: str) -> Optional[Dict[str, Any]]:
-        """Find a file in the recordings folder with a matching appProperties.content_hash.
+    def find_duplicate_by_content_sha256(self, content_sha256: str) -> Optional[Dict[str, Any]]:
+        """Find a file in the recordings folder with a matching appProperties.content_sha256.
 
         Returns a dict with keys 'id' and 'name' or None if not found.
         This implementation lists files in the recordings folder and checks
@@ -339,7 +321,7 @@ class GoogleDriveManager:
                 files = resp.get('files', [])
                 for f in files:
                     props = f.get('appProperties') or {}
-                    if props.get('content_hash') == content_hash:
+                    if props.get('content_sha256') == content_sha256:
                         return {'id': f.get('id'), 'name': f.get('name')}
                 page_token = resp.get('nextPageToken')
                 if not page_token:

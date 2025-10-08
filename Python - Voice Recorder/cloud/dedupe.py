@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 
-def compute_content_hash(file_path: str, chunk_size: int = 65536) -> Optional[str]:
+def compute_content_sha256(file_path: str, chunk_size: int = 65536) -> Optional[str]:
     """Compute a SHA-256 content hash for the given file.
 
     Returns a hex string or None if the file can't be read.

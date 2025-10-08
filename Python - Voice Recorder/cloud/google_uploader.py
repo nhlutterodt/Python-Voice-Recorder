@@ -6,7 +6,7 @@ import logging
 
 from .uploader import Uploader, UploadProgress, UploadResult
 from .upload_utils import chunked_upload_with_progress, TransientUploadError
-from .exceptions import NotAuthenticatedError, APILibrariesMissingError, UploadError
+from .exceptions import NotAuthenticatedError, APILibrariesMissingError, UploadError, DuplicateFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +27,11 @@ class GoogleDriveUploader(Uploader):
                description: Optional[str] = None,
                tags: Optional[list[str]] = None,
                progress_callback: Optional[Callable[[UploadProgress], None]] = None,
-               cancel_event: Optional[threading.Event] = None) -> UploadResult:
+               cancel_event: Optional[threading.Event] = None,
+               force: bool = False) -> UploadResult:
         # New callers can pass `force=True` to bypass server-side duplicate
         # detection if they intentionally want to upload again. The manager
-        # `find_duplicate_by_content_hash` helper may raise DuplicateFoundError
+    # `find_duplicate_by_content_sha256` helper may raise DuplicateFoundError
         # which we propagate unless force is True.
         # Keep behaviour: raise typed exceptions used across the cloud package
         try:
@@ -39,16 +40,22 @@ class GoogleDriveUploader(Uploader):
             # (unless caller explicitly forces upload). Any auth/library errors
             # should surface from the manager's helpers.
             try:
-                from .dedupe import compute_content_hash
-                ch = compute_content_hash(file_path)
+                from .dedupe import compute_content_sha256
+                ch = compute_content_sha256(file_path)
                 if ch:
-                    finder = getattr(self.drive_manager, 'find_duplicate_by_content_hash', None)
+                    finder = getattr(self.drive_manager, 'find_duplicate_by_content_sha256', None)
                     if callable(finder):
                         existing = finder(ch)
                         if existing:
-                            from .exceptions import DuplicateFoundError
-                            raise DuplicateFoundError(file_id=existing.get('id'), name=existing.get('name'))
+                            # If caller requested a forced upload, continue.
+                            if force:
+                                logger.info('Force upload requested; bypassing duplicate check for file %s', file_path)
+                            else:
+                                # Propagate a typed DuplicateFoundError so the UI can
+                                # prompt the user to reuse or force-upload as desired.
+                                raise DuplicateFoundError(file_id=existing.get('id'), name=existing.get('name'))
             except DuplicateFoundError:
+                # Don't swallow DuplicateFoundError; let outer handler re-raise
                 raise
             except Exception:
                 # If hashing or lookup fails, continue to upload normally
@@ -62,11 +69,16 @@ class GoogleDriveUploader(Uploader):
                 service = self.drive_manager._get_service()
                 folder_id = self.drive_manager._ensure_recordings_folder()
 
-                metadata = {
-                    'name': title or file_path.split('/')[-1],
-                    'parents': [folder_id],
-                    'description': description or ''
-                }
+                from .metadata_schema import build_upload_metadata
+
+                metadata = build_upload_metadata(
+                    file_path,
+                    title=title or file_path.split('/')[-1],
+                    description=description or '',
+                    tags=tags,
+                    content_sha256=ch,
+                    folder_id=folder_id,
+                )
 
                 # Prefer a manager-provided _import_http if present, else import
                 # the module-level helper from drive_manager.
@@ -124,6 +136,9 @@ class GoogleDriveUploader(Uploader):
         except NotAuthenticatedError:
             raise
         except APILibrariesMissingError:
+            raise
+        except DuplicateFoundError:
+            # Let callers handle duplicates (UI may prompt to reuse existing file)
             raise
         except TransientUploadError as e:
             raise UploadError('Transient upload failure') from e

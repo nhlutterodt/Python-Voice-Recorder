@@ -46,24 +46,72 @@ Observed weaknesses and risks
 
 3. Progress and cancellation API is internal-only
    - Progress is logged but not surfaced via callbacks/event hooks to UI code. There's no cancellation token to allow aborting a long upload from UI.
+# Investigation: "Upload to Google" behavior
+
+This document summarizes the current implementation, runtime behavior, failure modes, and recommended changes to improve the "Upload to Google" feature (Google Drive) in Voice Recorder Pro. The goal is to identify areas for abstraction, configurability, utility helpers, and effective orchestration so we can enhance reliability, testability, and expandability.
+
+Files inspected
+- `cloud/drive_manager.py` — main Google Drive upload/list/download/delete implementation.
+- `cloud/auth_manager.py` — Google OAuth manager (credentials, keyring, token file, PKCE/loopback flow).
+- `cloud/exceptions.py` — typed exceptions used by the cloud package (NotAuthenticatedError, APILibrariesMissingError, UploadError).
+- `scripts/validate_google_oauth.py` — utility added earlier that validates client secrets and prints an auth URL (useful dev tool).
+
+Executive summary of current behavior
+- Upload entrypoint: `GoogleDriveManager.upload_recording(file_path, title=None, description=None, tags=None) -> Optional[str]`
+  - Verifies file exists locally
+  - Ensures user is authenticated (via `auth_manager.is_authenticated()`) and Google libraries are available
+  - Ensures a recordings folder exists (searches by name, creates if missing)
+  - Constructs metadata including `name`, `parents`, `description` and `properties` (source/upload_date/file_size/tags)
+  - Uses `googleapiclient.http.MediaFileUpload(..., resumable=True)` and `service.files().create(..., media_body=media, fields='id, name, size, createdTime')`
+  - Calls `request.next_chunk()` in a loop to drive the resumable upload and logs progress if status is returned
+  - On success returns the Drive file ID (string)
+  - On failures, catches broad exceptions and returns `None` (explicitly catches NotAuthenticatedError and APILibrariesMissingError to log and return None; all other Exceptions are also caught and logged and lead to returning None)
+
+- Auth behavior: `GoogleAuthManager`
+  - Lazy-loads client secrets from `config_manager` -> `VRP_CLIENT_SECRETS` env var -> `config/client_secrets.json`
+  - OAuth: installed-app/loopback flow (127.0.0.1 ephemeral port) via `google_auth_oauthlib.flow.Flow`
+  - On successful `authenticate()` stores credentials using either OS `keyring` (preferred) or a file `cloud/credentials/token.json` with best-effort file permission restriction and simple cross-process locking
+  - Credential refresh is handled with `_refresh_if_needed()` guarded by a lock and event to avoid duplicate refreshes
+
+- Error handling and library availability
+  - Both auth and drive manager provide graceful degradation if Google API libs are missing (they detect availability with `importlib.util.find_spec` and raise/return friendly errors). The application logs this and disables cloud features.
+  - `upload_recording()` intentionally returns `None` on failure to preserve backward compatibility with calling code expecting optional returns instead of exceptions.
+
+Strengths observed
+- Lazy imports for Google libraries: app can run without cloud libs installed and cloud features degrade gracefully.
+- Resumable upload usage via `MediaFileUpload(..., resumable=True)` with chunked `request.next_chunk()` loop — good for large files and network glitches.
+- Folder detection + create logic ensures uploaded files are grouped under a single folder.
+- Metadata `properties` are used to surface searchability (source, upload_date, file_size, tags).
+- Secure-ish credential storage with preference for OS keyring and fallback to token file with file locking and best-effort permission restriction.
+- Concurrency-safety for credential refresh with an explicit lock and in-flight indicator.
+
+Observed weaknesses and risks
+1. Silent failure semantics
+  - `upload_recording()` swallows all exceptions and returns `None`. This hides useful context from higher-level callers and makes error reporting, retries, and user-facing error messages harder to implement reliably.
+
+2. Tight coupling to Google Drive SDK
+  - The implementation directly builds `service = build('drive', 'v3', credentials=...)` and invokes Drive-specific methods. There's no small adapter/extractor surface to substitute a different backend or mock easily for integration tests.
+
+3. Progress and cancellation API is internal-only
+  - Progress is logged but not surfaced via callbacks/event hooks to UI code. There's no cancellation token to allow aborting a long upload from UI.
 
 4. Retry behavior & backoff
-   - The resumable upload handles chunking but the code doesn't implement an explicit retry/backoff strategy for `request.next_chunk()` exceptions (network failures, transient API 5xx). There is no bounded attempt count.
+  - The resumable upload handles chunking but the code doesn't implement an explicit retry/backoff strategy for `request.next_chunk()` exceptions (network failures, transient API 5xx). There is no bounded attempt count.
 
 5. Idempotency & deduplication
-   - If an upload is retried multiple times (or a file re-uploaded), the code will create duplicate files. No hashing, content-based dedupe, or idempotency keys are provided.
+  - If an upload is retried multiple times (or a file re-uploaded), the code will create duplicate files. No hashing, content-based dedupe, or idempotency keys are provided.
 
 6. Metadata shape is ad-hoc
-   - `properties` is a dict of stringified values (including upload_date and file_size). No canonical schema or validation is shared; this complicates searching/filtering and cross-feature reuse.
+  - `properties` is a dict of stringified values (including upload_date and file_size). No canonical schema or validation is shared; this complicates searching/filtering and cross-feature reuse.
 
 7. Tests & instrumentation
-   - There are limited direct unit tests for error flows, large-upload behavior, or retry scenarios. The code relies on runtime Google SDK behaviours which complicates CI test coverage.
+  - There are limited direct unit tests for error flows, large-upload behavior, or retry scenarios. The code relies on runtime Google SDK behaviours which complicates CI test coverage.
 
 8. Blocking/synchronous design
-   - All Drive operations are blocking in the UI thread if called directly. While the app uses a background process in the current session for the app itself, the drive manager does not present an async API or built-in worker queue.
+  - All Drive operations are blocking in the UI thread if called directly. While the app uses a background process in the current session for the app itself, the drive manager does not present an async API or built-in worker queue.
 
 9. Security / secrets lifecycle
-   - The auth manager supports `VRP_CLIENT_SECRETS` and keyring but it's still easy for developers to accidentally place a `client_secrets.json` in the repo as we just addressed. CI patterns are not enforced in code; app expects client config in certain places and the override is env-var only.
+  - The auth manager supports `VRP_CLIENT_SECRETS` and keyring but it's still easy for developers to accidentally place a `client_secrets.json` in the repo as we just addressed. CI patterns are not enforced in code; app expects client config in certain places and the override is env-var only.
 
 Concrete improvement opportunities (design + prioritized plan)
 
@@ -76,10 +124,10 @@ Concrete improvement opportunities (design + prioritized plan)
   - class UploadResult(TypedDict): file_id: str; name: str; size: int; created_time: str
   - class UploadProgress(TypedDict): uploaded_bytes: int; total_bytes: Optional[int]; percent: Optional[int]
   - class Uploader:
-    - def upload(self, file_path: str, *, title: Optional[str], description: Optional[str], tags: Optional[List[str]], progress_callback: Optional[Callable[[UploadProgress], None]] = None, cancel_event: Optional[threading.Event] = None) -> UploadResult
-    - def list(self, ...) -> List[...]
-    - def download(...)
-    - def delete(...)
+   - def upload(self, file_path: str, *, title: Optional[str], description: Optional[str], tags: Optional[List[str]], progress_callback: Optional[Callable[[UploadProgress], None]] = None, cancel_event: Optional[threading.Event] = None) -> UploadResult
+   - def list(self, ...) -> List[...]
+   - def download(...)
+   - def delete(...)
 - Implement the current Drive behavior as `GoogleDriveUploader(Uploader)` which adapts `GoogleDriveManager` internals. Keep the existing `GoogleDriveManager` for discovery, but introduce the adapter to present a clean surface.
 - Benefits: easier to mock in tests, allows adding `DropboxUploader` or `LocalUploader` later, and keeps UI code decoupled.
 
@@ -139,56 +187,7 @@ Suggested incremental implementation plan
   2. Change UI wiring to call new adapter (keep `GoogleDriveManager` for compatibility but mark as deprecated).
   3. Add unit tests for upload success, failures, and progress callback using mocks.
 
-- Sprint 2 (3–7 days):
-  1. Add retry/backoff utility and apply it to the chunk upload loop.
-  2. Add cancellation support and test it.
-  3. Add metadata builder and content-hash dedupe opt-in.
-
-- Sprint 3 (2–5 days):
-  1. Add background job queue and persistence for upload jobs.
-  2. UI integration: job list, progress, cancel, retry actions.
-  3. Add telemetry and CI integration for a smoke upload test.
-
-Developer API contract (short)
-- Uploader.upload(file_path, *, title, description, tags, progress_callback, cancel_event) -> UploadResult
-  - Inputs: local path (must exist), optional metadata
-  - Outputs: UploadResult with file_id, name, size, created_time or raises typed exceptions
-  - Progress: progress_callback called with {uploaded_bytes, total_bytes, percent}
-  - Errors: NotAuthenticatedError, APILibrariesMissingError, UploadError, TransientNetworkError, OperationCancelled
-
-Edge cases & tests to include
-- File missing on disk
-- Not authenticated
-- Google libs not installed (simulate by patching find_spec)
-- Token expired during upload -> refresh race (concurrent uploads) - ensure single refresh done
-- Network interruption mid-chunk and resumed upload
-- Upload cancellation from UI
-- Re-upload of same file (duplicate detection)
-- Large files (>> memory) to ensure streaming and chunking
-
-Migration notes & compatibility
-- Keep a compatibility shim `drive_manager.upload_recording_legacy(...)` that keeps the current `Optional[str]` return shape while new callers use the typed `Uploader` interface and exceptions. This avoids breaking code paths while allowing refactor.
-
-Security checklist
-- Continue to ignore local `config/client_secrets.json` in `.gitignore` and recommend local placement in a secured folder (we put `C:\Users\Owner\secrets` in current environment).
-- Rotate OAuth client secret if it was exposed in repo history; run a git-history scan to confirm.
-- For CI: fetch client secrets from the secret store and write to a temporary path at job runtime; do not commit credentials.
-
-Appendix: quick example of the proposed adapter interface (conceptual)
-```python
-# cloud/uploader.py (concept)
-from typing import Optional, Callable, TypedDict
-
-class UploadProgress(TypedDict):
-    uploaded_bytes: int
-    total_bytes: Optional[int]
-    percent: Optional[int]
-
-class UploadResult(TypedDict):
-    file_id: str
-    name: str
-    size: int
-    created_time: str
+... (rest of file omitted for brevity) ...
 
 class Uploader:
     def upload(self, file_path: str, *, title: Optional[str]=None, description: Optional[str]=None,

@@ -83,3 +83,32 @@ def test_chunked_upload_retries_on_exception(monkeypatch):
     with pytest.raises(IOError):
         chunked_upload_with_progress(create_req, max_retries=2, retry_backoff=0)
     assert calls['attempts'] >= 2
+
+
+def test_chunked_upload_transient_http_retries_and_reinitiates():
+    """Simulate a transient HTTP 5xx on first attempt and a successful request on retry.
+
+    The create_request factory should be called again after a transient failure and the
+    helper should return the successful response within max_retries.
+    """
+    attempts = {'count': 0}
+
+    status = FakeStatus([0.5])
+
+    def create_req():
+        attempts['count'] += 1
+
+        if attempts['count'] == 1:
+            # first request fails with a transient server error
+            class BadReq:
+                def next_chunk(self):
+                    raise Exception('503 Service Unavailable')
+
+            return BadReq()
+
+        # subsequent attempts return a working request that completes
+        return FakeRequest([(status, None), (status, {'id': 'ok'})])
+
+    resp = chunked_upload_with_progress(create_req, max_retries=3, retry_backoff=0)
+    assert resp == {'id': 'ok'}
+    assert attempts['count'] >= 2
