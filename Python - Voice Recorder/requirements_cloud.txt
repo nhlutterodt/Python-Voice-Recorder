@@ -7,6 +7,9 @@ google-auth-oauthlib==1.2.1
 google-auth-httplib2==0.2.0
 google-api-python-client==2.151.0
 
+# OS keyring support used by the cloud auth manager
+keyring==25.6.0
+
 # HTTP and OAuth Flow Support
 requests==2.32.3
 oauthlib==3.2.2
