@@ -1,3 +1,69 @@
+import os
+import importlib
+from types import SimpleNamespace
+
+import pytest
+
+
+@pytest.fixture(scope='session')
+def qapp():
+    """Provide a headless Qt QApplication for widget tests.
+
+    Uses the offscreen platform so tests don't require a display.
+    """
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    yield app
+
+
+@pytest.fixture
+def cloud_mocks(monkeypatch):
+    """Provide dummy cloud classes and patch them into the enhanced_editor module.
+
+    Returns a small dict with keys: 'ee' (the enhanced_editor module), 'DummyAuth',
+    and 'DummyCloudUI' so tests can inspect last created instances.
+    """
+    ee = importlib.import_module('enhanced_editor')
+
+    class DummyAuthManager:
+        last_instance = None
+
+        def __init__(self, use_keyring=True, *a, **kw):
+            DummyAuthManager.last_instance = self
+            self.use_keyring = use_keyring
+
+    class DummyDriveManager:
+        def __init__(self, auth):
+            self.auth = auth
+
+    class DummyFeatureGate:
+        def __init__(self, auth):
+            self.auth = auth
+
+    # QWidget subclass for tab acceptance
+    from PySide6.QtWidgets import QWidget
+
+    class DummyCloudUI(QWidget):
+        def __init__(self, auth, drive, feature_gate):
+            super().__init__()
+            self.auth = auth
+            self.drive = drive
+            self.feature_gate = feature_gate
+
+    monkeypatch.setattr(ee, '_cloud_available', True)
+    monkeypatch.setattr(ee, 'GoogleAuthManager', DummyAuthManager)
+    monkeypatch.setattr(ee, 'GoogleDriveManager', DummyDriveManager)
+    monkeypatch.setattr(ee, 'FeatureGate', DummyFeatureGate)
+    monkeypatch.setattr(ee, 'CloudUI', DummyCloudUI)
+
+    return {
+        'ee': ee,
+        'DummyAuth': DummyAuthManager,
+        'DummyCloudUI': DummyCloudUI,
+    }
 import tempfile
 from pathlib import Path
 from typing import Generator
