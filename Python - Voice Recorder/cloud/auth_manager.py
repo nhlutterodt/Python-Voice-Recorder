@@ -358,9 +358,23 @@ class GoogleAuthManager:
             except Exception as e:  # pragma: no cover
                 logger.error("Error from config_manager: %s", e)
 
-        # Fallback to client_secrets.json
+        # Allow overriding the client secrets path via environment variable (useful for dev/test)
+        env_path = os.environ.get("VRP_CLIENT_SECRETS")
+        if env_path:
+            try:
+                envp = Path(env_path)
+                if envp.exists():
+                    logger.info("Loading Google client config from VRP_CLIENT_SECRETS: %s", envp)
+                    return json.loads(envp.read_text(encoding="utf-8"))
+                else:
+                    logger.warning("VRP_CLIENT_SECRETS is set but file not found: %s", envp)
+            except Exception as e:  # pragma: no cover
+                logger.error("Error reading VRP_CLIENT_SECRETS file %s: %s", env_path, e)
+
+        # Fallback to client_secrets.json next
         if self.client_secrets_file.exists():
             try:
+                logger.info("Loading Google client config from %s", self.client_secrets_file)
                 return json.loads(self.client_secrets_file.read_text(encoding="utf-8"))
             except Exception as e:  # pragma: no cover
                 logger.error("Error reading client_secrets.json: %s", e)
