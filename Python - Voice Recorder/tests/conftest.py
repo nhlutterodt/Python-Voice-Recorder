@@ -27,31 +27,13 @@ def cloud_mocks(monkeypatch):
     and 'DummyCloudUI' so tests can inspect last created instances.
     """
     ee = importlib.import_module('enhanced_editor')
-
-    class DummyAuthManager:
-        last_instance = None
-
-        def __init__(self, use_keyring=True, *a, **kw):
-            DummyAuthManager.last_instance = self
-            self.use_keyring = use_keyring
-
-    class DummyDriveManager:
-        def __init__(self, auth):
-            self.auth = auth
-
-    class DummyFeatureGate:
-        def __init__(self, auth):
-            self.auth = auth
-
-    # QWidget subclass for tab acceptance
-    from PySide6.QtWidgets import QWidget
-
-    class DummyCloudUI(QWidget):
-        def __init__(self, auth, drive, feature_gate):
-            super().__init__()
-            self.auth = auth
-            self.drive = drive
-            self.feature_gate = feature_gate
+    # Import reusable dummy helpers from tests.utils
+    from tests.utils import (
+        DummyAuthManager,
+        DummyDriveManager,
+        DummyFeatureGate,
+        DummyCloudUI,
+    )
 
     monkeypatch.setattr(ee, '_cloud_available', True)
     monkeypatch.setattr(ee, 'GoogleAuthManager', DummyAuthManager)

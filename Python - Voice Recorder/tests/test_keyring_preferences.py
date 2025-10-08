@@ -435,3 +435,40 @@ def test_auth_manager_does_not_write_keyring_when_disabled(tmp_path, monkeypatch
 
     assert called['was_called'] is False
 
+
+def test_auth_manager_calls_keyring_when_enabled(tmp_path, monkeypatch):
+    """Ensure GoogleAuthManager._save_credentials_securely calls
+    keyring.set_password when the instance was created with use_keyring=True.
+    """
+    from cloud.auth_manager import GoogleAuthManager
+
+    class FakeCreds:
+        def __init__(self):
+            self.valid = True
+            self.expired = False
+
+        def to_json(self):
+            return '{"token":"fake-enabled"}'
+
+    fake = FakeCreds()
+
+    mgr = GoogleAuthManager(app_dir=tmp_path, credentials=fake, use_keyring=True)
+
+    # Spy for set_password
+    calls = []
+
+    def spy_set_password(service, name, value):
+        calls.append((service, name, value))
+
+    import sys as _sys
+    fake_keyring_mod = SimpleNamespace(set_password=spy_set_password)
+    monkeypatch.setitem(_sys.modules, 'keyring', fake_keyring_mod)
+
+    mgr._save_credentials_securely()
+
+    assert len(calls) == 1
+    svc, keyname, val = calls[0]
+    assert svc == 'VoiceRecorderPro'
+    assert 'token.json' in keyname
+    assert val == fake.to_json()
+
