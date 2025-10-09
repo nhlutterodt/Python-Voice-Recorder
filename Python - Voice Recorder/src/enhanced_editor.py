@@ -6,27 +6,27 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLineEdit, QMessageBox,
     QProgressBar, QTabWidget, QComboBox
 )
-from waveform_viewer import WaveformViewer
+from .waveform_viewer import WaveformViewer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QCloseEvent
 from pydub import AudioSegment  # type: ignore
 import os
 from typing import Optional, Any  # Union not used
-from config_manager import config_manager
+from .config_manager import config_manager
 
-from audio_processing import (
-    AudioLoaderThread, 
+from .audio_processing import (
+    AudioLoaderThread,
     AudioTrimProcessor  # type: ignore
 )
-from audio_recorder import AudioRecorderManager
+from .audio_recorder import AudioRecorderManager
 from models.database import SessionLocal
 from models.recording import Recording
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts', 'utilities'))
 from version import APP_NAME, UIConstants  # type: ignore
 from core.logging_config import get_logger
-from settings_ui import SettingsDialog
+from .settings_ui import SettingsDialog
 
 # Setup logging for this module
 logger = get_logger(__name__)

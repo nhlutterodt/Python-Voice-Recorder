@@ -23,11 +23,21 @@ Write-Host "✅ Environment validated" -ForegroundColor Green
 Write-Host "🚀 Launching application..." -ForegroundColor Yellow
 Write-Host ""
 
-# Use the exact command that worked in our testing
-$launchCmd = "cd `"$projectRoot`" && set PYTHONPATH=. && `"$venvPath`" -m src.entrypoint"
-
+# Ensure PYTHONPATH points to the project root so package-style imports work
 try {
-    cmd /c $launchCmd
+    # Make sure the working directory is the project root and PYTHONPATH points to the project root
+    Set-Location -Path $projectRoot
+    $env:PYTHONPATH = $projectRoot
+
+    Write-Host "Using PYTHONPATH=$env:PYTHONPATH" -ForegroundColor Cyan
+    # Invoke the venv Python executable as a module so relative imports inside src/ work
+    & "$venvPath" -m src.entrypoint
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+        Write-Host "❌ Application exited with code $exitCode" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit $exitCode
+    }
 } catch {
     Write-Host "❌ Launch failed: $($_.Exception.Message)" -ForegroundColor Red
     Read-Host "Press Enter to exit"

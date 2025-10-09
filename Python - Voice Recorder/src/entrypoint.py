@@ -9,9 +9,19 @@ Keeping this in a separate small module makes packaging entrypoints and tests si
 """
 import sys
 from PySide6.QtWidgets import QApplication
-from enhanced_main import EnhancedAudioEditor, start_job_worker
-from config_manager import config_manager
-from core.logging_config import setup_application_logging
+from pathlib import Path
+
+# Prefer package-relative imports for modules inside src/, but import
+# top-level packages (core, models) using absolute imports so they resolve
+# from the project root when running as a module.
+try:
+    from .enhanced_main import EnhancedAudioEditor, start_job_worker
+    from .config_manager import config_manager
+    from core.logging_config import setup_application_logging
+except Exception:
+    from enhanced_main import EnhancedAudioEditor, start_job_worker
+    from config_manager import config_manager
+    from core.logging_config import setup_application_logging
 
 logger = setup_application_logging("INFO")
 

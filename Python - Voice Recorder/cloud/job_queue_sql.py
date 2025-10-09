@@ -15,6 +15,22 @@ from typing import Optional, List
 
 
 DEFAULT_DB = None
+try:
+    # Prefer the project's configured SQLAlchemy DATABASE_URL so the job queue
+    # operates on the same sqlite file as the rest of the app when no
+    # explicit db_path is passed. Import locally to avoid import cycles at
+    # higher levels.
+    from models import database as _app_db
+
+    if isinstance(_app_db.DATABASE_URL, str) and _app_db.DATABASE_URL.startswith('sqlite:///'):
+        # Convert SQLAlchemy sqlite URL to a filesystem path the sqlite3
+        # stdlib can open.
+        DEFAULT_DB = _app_db.DATABASE_URL.replace('sqlite:///', '', 1)
+    else:
+        DEFAULT_DB = _app_db.DATABASE_URL
+except Exception:
+    # If anything goes wrong, fall back to in-memory default.
+    DEFAULT_DB = None
 
 
 @dataclass

@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox
 from PySide6.QtCore import Qt
-from config_manager import config_manager
+from .config_manager import config_manager
 
 
 class SettingsDialog(QDialog):

@@ -340,6 +340,14 @@ class CloudUploadWidget(QWidget):
         # Jobs button to view background upload jobs
         from .job_dialog import JobDialog
         self.jobs_button = QPushButton("Jobs...")
+        try:
+            # Temporary debug info to verify DB paths at runtime
+            from models import database as _db
+            from . import job_queue_sql as _jq
+            print(f"[debug] models.DATABASE_URL={_db.DATABASE_URL}")
+            print(f"[debug] job_queue_sql.DEFAULT_DB={repr(_jq.DEFAULT_DB)}")
+        except Exception:
+            pass
         self.jobs_button.clicked.connect(lambda: JobDialog(self).exec())
         layout.addWidget(self.jobs_button)
 

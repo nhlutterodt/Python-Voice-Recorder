@@ -3,11 +3,22 @@
 
 import sys
 from PySide6.QtWidgets import QApplication
-from enhanced_editor import EnhancedAudioEditor
-from config_manager import config_manager
+
+# Support running as a module (python -m src.enhanced_main) and as a
+# script by preferring package-relative imports with absolute fallbacks.
+try:
+    from .enhanced_editor import EnhancedAudioEditor
+    from .config_manager import config_manager
+except Exception:
+    from enhanced_editor import EnhancedAudioEditor
+    from config_manager import config_manager
 import argparse
-from models.database import engine, Base
-from core.logging_config import setup_application_logging
+try:
+    from models.database import engine, Base
+    from core.logging_config import setup_application_logging
+except Exception:
+    from .models.database import engine, Base
+    from .core.logging_config import setup_application_logging
 from typing import Optional, Any
 import threading
 
