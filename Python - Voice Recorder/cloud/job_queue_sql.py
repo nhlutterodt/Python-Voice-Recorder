@@ -44,8 +44,13 @@ class JobRow:
     attempts: int = 0
     max_attempts: int = 3
     created_iso: Optional[str] = None
+    started_iso: Optional[str] = None
+    finished_iso: Optional[str] = None
+    uploaded_bytes: int = 0
+    total_bytes: Optional[int] = None
     last_error: Optional[str] = None
     drive_file_id: Optional[str] = None
+    cancel_requested: int = 0
 
 
 def _connect(db_path: Optional[str] = None):
@@ -69,10 +74,38 @@ def init_db(db_path: Optional[str] = None) -> None:
         attempts INTEGER DEFAULT 0,
         max_attempts INTEGER DEFAULT 3,
         created_iso TEXT,
+        started_iso TEXT,
+        finished_iso TEXT,
+        uploaded_bytes INTEGER DEFAULT 0,
+        total_bytes INTEGER,
         last_error TEXT,
-        drive_file_id TEXT
+        drive_file_id TEXT,
+        cancel_requested INTEGER DEFAULT 0
     )
     ''')
+    conn.commit()
+
+    # Try to add missing columns if the table existed previously (safe no-op on newer DBs)
+    try:
+        cur.execute("ALTER TABLE jobs ADD COLUMN started_iso TEXT")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE jobs ADD COLUMN finished_iso TEXT")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE jobs ADD COLUMN uploaded_bytes INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE jobs ADD COLUMN total_bytes INTEGER")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER DEFAULT 0")
+    except Exception:
+        pass
     conn.commit()
     conn.close()
 
@@ -80,8 +113,8 @@ def init_db(db_path: Optional[str] = None) -> None:
 def enqueue_job(job: JobRow, db_path: Optional[str] = None) -> None:
     conn = _connect(db_path)
     cur = conn.cursor()
-    cur.execute('INSERT OR REPLACE INTO jobs (id,file_path,title,description,tags,status,attempts,max_attempts,created_iso,last_error,drive_file_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)', (
-        job.id, job.file_path, job.title, job.description, json.dumps(job.tags) if job.tags is not None else None, job.status, job.attempts, job.max_attempts, job.created_iso or datetime.utcnow().isoformat(), job.last_error, job.drive_file_id
+    cur.execute('INSERT OR REPLACE INTO jobs (id,file_path,title,description,tags,status,attempts,max_attempts,created_iso,started_iso,finished_iso,uploaded_bytes,total_bytes,last_error,drive_file_id,cancel_requested) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', (
+        job.id, job.file_path, job.title, job.description, json.dumps(job.tags) if job.tags is not None else None, job.status, job.attempts, job.max_attempts, job.created_iso or datetime.utcnow().isoformat(), job.started_iso, job.finished_iso, job.uploaded_bytes, job.total_bytes, job.last_error, job.drive_file_id, job.cancel_requested
     ))
     conn.commit()
     conn.close()
@@ -96,16 +129,58 @@ def dequeue_next(db_path: Optional[str] = None) -> Optional[JobRow]:
     if not row:
         conn.close()
         return None
-    cur.execute("UPDATE jobs SET status='running', attempts=attempts+1 WHERE id=?", (row['id'],))
+    # Mark running and record start time
+    started = datetime.utcnow().isoformat()
+    cur.execute("UPDATE jobs SET status='running', attempts=attempts+1, started_iso=? WHERE id=?", (started, row['id']))
     conn.commit()
     conn.close()
-    return JobRow(id=row['id'], file_path=row['file_path'], title=row['title'], description=row['description'], tags=json.loads(row['tags']) if row['tags'] else None, status='running', attempts=row['attempts'] or 0, max_attempts=row['max_attempts'] or 3, created_iso=row['created_iso'], last_error=row['last_error'], drive_file_id=row['drive_file_id'])
+    return JobRow(
+        id=row['id'],
+        file_path=row['file_path'],
+        title=row['title'],
+        description=row['description'],
+        tags=json.loads(row['tags']) if row['tags'] else None,
+        status='running',
+        attempts=row['attempts'] or 0,
+        max_attempts=row['max_attempts'] or 3,
+        created_iso=row['created_iso'],
+        started_iso=started,
+        finished_iso=row.get('finished_iso'),
+        uploaded_bytes=row.get('uploaded_bytes') or 0,
+        total_bytes=row.get('total_bytes'),
+        last_error=row['last_error'],
+        drive_file_id=row['drive_file_id'],
+        cancel_requested=row.get('cancel_requested') or 0,
+    )
 
 
 def update_job_status(job_id: str, status: str, db_path: Optional[str] = None, last_error: Optional[str] = None, drive_file_id: Optional[str] = None) -> None:
     conn = _connect(db_path)
     cur = conn.cursor()
-    cur.execute('UPDATE jobs SET status=?, last_error=?, drive_file_id=? WHERE id=?', (status, last_error, drive_file_id, job_id))
+    finished = None
+    if status in ('succeeded', 'failed', 'cancelled'):
+        finished = datetime.utcnow().isoformat()
+    if finished is not None:
+        cur.execute('UPDATE jobs SET status=?, last_error=?, drive_file_id=?, finished_iso=? WHERE id=?', (status, last_error, drive_file_id, finished, job_id))
+    else:
+        cur.execute('UPDATE jobs SET status=?, last_error=?, drive_file_id=? WHERE id=?', (status, last_error, drive_file_id, job_id))
+    conn.commit()
+    conn.close()
+
+
+def update_job_progress(job_id: str, uploaded_bytes: int, total_bytes: Optional[int] = None, db_path: Optional[str] = None) -> None:
+    conn = _connect(db_path)
+    cur = conn.cursor()
+    cur.execute('UPDATE jobs SET uploaded_bytes=?, total_bytes=? WHERE id=?', (uploaded_bytes, total_bytes, job_id))
+    conn.commit()
+    conn.close()
+
+
+def set_job_cancel_requested(job_id: str, db_path: Optional[str] = None) -> None:
+    """Mark a job as cancel requested so the running worker can pick it up."""
+    conn = _connect(db_path)
+    cur = conn.cursor()
+    cur.execute('UPDATE jobs SET cancel_requested=1 WHERE id=?', (job_id,))
     conn.commit()
     conn.close()
 
@@ -146,12 +221,46 @@ def run_worker(drive_manager, db_path: Optional[str] = None, poll_interval: floa
 
             # Attempt the upload; uploader.upload may raise DuplicateFoundError
             # which will be treated as success by storing the existing file id.
+            # Wire progress updates from uploader back into the DB so the UI can poll
+            cancel_event = threading.Event()
+
+            def _watch_cancel():
+                # Poll the DB for cancel requests and set the cancel_event when requested
+                try:
+                    while not cancel_event.is_set() and not stop_event.is_set():
+                        conn = _connect(db_path)
+                        cur = conn.cursor()
+                        cur.execute('SELECT cancel_requested FROM jobs WHERE id=?', (job.id,))
+                        r = cur.fetchone()
+                        conn.close()
+                        if r and int(r['cancel_requested'] or 0) == 1:
+                            cancel_event.set()
+                            break
+                        time.sleep(0.5)
+                except Exception:
+                    return
+
+            watcher = threading.Thread(target=_watch_cancel, daemon=True)
+            watcher.start()
+
+            def _progress_cb(progress: dict):
+                try:
+                    uploaded = int(progress.get('uploaded_bytes', 0) or 0)
+                    total = progress.get('total_bytes')
+                    update_job_progress(job.id, uploaded, total, db_path=db_path)
+                except Exception:
+                    pass
+
             try:
-                result = uploader.upload(job.file_path, title=job.title, description=job.description, tags=job.tags)
+                result = uploader.upload(job.file_path, title=job.title, description=job.description, tags=job.tags, progress_callback=_progress_cb, cancel_event=cancel_event)
                 update_job_status(job.id, 'succeeded', db_path=db_path, drive_file_id=result.get('file_id'))
             except Exception as e:
                 # If the uploader raises an error, mark as failed.
-                update_job_status(job.id, 'failed', db_path=db_path, last_error=str(e))
+                # If the cancel_event was set, report cancelled
+                if cancel_event.is_set():
+                    update_job_status(job.id, 'cancelled', db_path=db_path, last_error='cancelled by user')
+                else:
+                    update_job_status(job.id, 'failed', db_path=db_path, last_error=str(e))
         except Exception as e:
             update_job_status(job.id, 'failed', db_path=db_path, last_error=str(e))
         # Short sleep to avoid tight loop

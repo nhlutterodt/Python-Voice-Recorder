@@ -20,8 +20,8 @@ class JobDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["ID", "Status", "Attempts", "Max", "File", "Last Error"])
+        self.table = QTableWidget(0, 8)
+        self.table.setHorizontalHeaderLabels(["ID", "Status", "Attempts", "Max", "Progress", "File", "Last Error", "Drive ID"])
         self.table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.table)
 
@@ -50,8 +50,19 @@ class JobDialog(QDialog):
             self.table.setItem(r, 1, QTableWidgetItem(str(j.status)))
             self.table.setItem(r, 2, QTableWidgetItem(str(j.attempts)))
             self.table.setItem(r, 3, QTableWidgetItem(str(j.max_attempts)))
-            self.table.setItem(r, 4, QTableWidgetItem(str(j.file_path)))
-            self.table.setItem(r, 5, QTableWidgetItem(str(j.last_error or "")))
+            # Progress: show uploaded/total if available
+            prog = ""
+            try:
+                if getattr(j, 'uploaded_bytes', 0) and getattr(j, 'total_bytes', None):
+                    prog = f"{int(j.uploaded_bytes)}/{int(j.total_bytes)}"
+                elif getattr(j, 'uploaded_bytes', 0):
+                    prog = f"{int(j.uploaded_bytes)} bytes"
+            except Exception:
+                prog = ""
+            self.table.setItem(r, 4, QTableWidgetItem(prog))
+            self.table.setItem(r, 5, QTableWidgetItem(str(j.file_path)))
+            self.table.setItem(r, 6, QTableWidgetItem(str(j.last_error or "")))
+            self.table.setItem(r, 7, QTableWidgetItem(str(j.drive_file_id or "")))
 
     def _selected_job_ids(self) -> List[str]:
         ids: List[str] = []
@@ -81,11 +92,14 @@ class JobDialog(QDialog):
         if not ids:
             QMessageBox.information(self, "No selection", "No jobs selected to cancel")
             return
+        from .job_queue_sql import set_job_cancel_requested
         for job_id in ids:
             try:
+                # Ask the running worker to cancel gracefully; also mark status as cancelled
+                set_job_cancel_requested(job_id)
                 update_job_status(job_id, 'cancelled')
             except Exception:
                 pass
-        QMessageBox.information(self, "Cancelled", "Selected jobs cancelled")
+        QMessageBox.information(self, "Cancelled", "Selected jobs cancelled (requested)")
         self.refresh()
 

@@ -16,7 +16,7 @@ class GoogleDriveUploader(Uploader):
     actual Drive interactions to the existing GoogleDriveManager.
     """
 
-    def __init__(self, drive_manager: Any, chunk_size: int = 256 * 1024):
+    def __init__(self, drive_manager: Any, chunk_size: Optional[int] = None):
         self.drive_manager = drive_manager
         self.chunk_size = chunk_size
 
@@ -89,7 +89,12 @@ class GoogleDriveUploader(Uploader):
                     else:
                         from .drive_manager import _import_http as _module_import_http
                         media_cls = _module_import_http()[0]
-                    media = media_cls(file_path, mimetype=None, resumable=True)
+                    # Respect configured chunk_size for MediaFileUpload if provided
+                    chunksize = getattr(self, 'chunk_size', None)
+                    if chunksize:
+                        media = media_cls(file_path, mimetype=None, resumable=True, chunksize=chunksize)
+                    else:
+                        media = media_cls(file_path, mimetype=None, resumable=True)
                 except Exception:
                     # Let underlying errors surface (auth/missing libs) so callers
                     # receive typed exceptions from _get_service/_import_http.
@@ -99,6 +104,7 @@ class GoogleDriveUploader(Uploader):
 
                 # Attach total_size if available on media
                 try:
+                    # MediaFileUpload exposes size and the request can be annotated for progress helpers
                     request.total_size = int(getattr(media, 'size', 0) or 0) or None
                 except Exception:
                     request.total_size = None

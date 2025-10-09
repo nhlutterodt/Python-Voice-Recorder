@@ -200,7 +200,26 @@ class CloudAuthWidget(QWidget):
         """)
         layout.addWidget(self.tier_label)
         
-        self.setLayout(layout)
+        # Client config helper area (hidden by default)
+        self.client_config_widget = QWidget()
+        cc_layout = QHBoxLayout(self.client_config_widget)
+        self.client_config_label = QLabel('')
+        self.client_config_label.setStyleSheet('color: #a94442;')
+        cc_layout.addWidget(self.client_config_label)
+
+        self.open_requirements_btn = QPushButton('Open requirements_cloud.txt')
+        self.open_requirements_btn.clicked.connect(self.on_open_requirements)
+        cc_layout.addWidget(self.open_requirements_btn)
+
+        self.open_client_secrets_btn = QPushButton('Open client_secrets.json')
+        self.open_client_secrets_btn.clicked.connect(self.on_open_client_secrets)
+        cc_layout.addWidget(self.open_client_secrets_btn)
+
+        self.retry_init_btn = QPushButton('Retry Init')
+        self.retry_init_btn.clicked.connect(self.on_retry_init)
+        cc_layout.addWidget(self.retry_init_btn)
+
+        layout.addWidget(self.client_config_widget)
     
     def update_auth_status(self):
         """Update UI based on authentication status"""
@@ -228,6 +247,27 @@ class CloudAuthWidget(QWidget):
             self.status_label.setText("🔒 Not signed in - Limited features available")
             self.auth_button.setText("🔐 Sign in with Google")
             self.user_info_widget.hide()
+
+        # Check for presence of client config and show helpful actions
+        try:
+            cfg = None
+            try:
+                cfg = self.auth_manager._get_client_config()
+            except Exception:
+                cfg = None
+
+            if cfg is None:
+                # Show helpful instructions and buttons
+                self.client_config_label.setText("No Google OAuth client configuration found.")
+                self.client_config_widget.show()
+            else:
+                self.client_config_widget.hide()
+        except Exception:
+            # Don't let diagnostic checks crash the UI
+            try:
+                self.client_config_widget.hide()
+            except Exception:
+                pass
         
         # Update tier status
         tier_text = self.feature_gate.get_tier_status_text()
@@ -273,6 +313,40 @@ class CloudAuthWidget(QWidget):
         finally:
             self.auth_button.setEnabled(True)
             self.update_auth_status()
+
+    def on_open_requirements(self):
+        try:
+            app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            path = os.path.join(app_dir, 'requirements_cloud.txt')
+            if os.path.exists(path):
+                from PySide6.QtGui import QDesktopServices
+                from PySide6.QtCore import QUrl
+                QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+            else:
+                QMessageBox.information(self, 'Not Found', f'Requirements file not found: {path}')
+        except Exception as e:
+            QMessageBox.warning(self, 'Error', f'Failed to open requirements file: {e}')
+
+    def on_open_client_secrets(self):
+        try:
+            cs = str(self.auth_manager.client_secrets_file)
+            if os.path.exists(cs):
+                from PySide6.QtGui import QDesktopServices
+                from PySide6.QtCore import QUrl
+                QDesktopServices.openUrl(QUrl.fromLocalFile(cs))
+            else:
+                QMessageBox.information(self, 'Not Found', f'client_secrets.json not found at: {cs}\n\nPlace your OAuth client config there or set VRP_CLIENT_SECRETS env var.')
+        except Exception as e:
+            QMessageBox.warning(self, 'Error', f'Failed to open client_secrets: {e}')
+
+    def on_retry_init(self):
+        """Lightweight retry: re-check client config and refresh UI. Full runtime init may require app restart."""
+        try:
+            # Re-run the client config check and update UI
+            self.update_auth_status()
+            QMessageBox.information(self, 'Retry Complete', 'Re-checked client configuration. If you installed dependencies, restart the app to fully enable cloud features.')
+        except Exception as e:
+            QMessageBox.warning(self, 'Retry Failed', f'Failed to retry initialization: {e}')
 
 class CloudUploadWidget(QWidget):
     """Widget for uploading recordings to cloud"""
@@ -351,6 +425,11 @@ class CloudUploadWidget(QWidget):
         self.jobs_button.clicked.connect(lambda: JobDialog(self).exec())
         layout.addWidget(self.jobs_button)
 
+        # Choose target folder button
+        self.choose_folder_button = QPushButton("Choose Folder")
+        self.choose_folder_button.clicked.connect(self.on_choose_folder_clicked)
+        layout.addWidget(self.choose_folder_button)
+
         # Cancel upload button (hidden until upload starts)
         self.cancel_button = QPushButton("✖ Cancel")
         self.cancel_button.clicked.connect(self.on_cancel_clicked)
@@ -392,9 +471,9 @@ class CloudUploadWidget(QWidget):
             QMessageBox.information(self, "Feature Restricted", restriction_msg or "Feature not available")
             return
 
-        # Ensure user is authenticated before attempting upload. The Drive manager
-        # will raise NotAuthenticatedError if auth is missing but we proactively
-        # check and prompt the user here to provide a better UX.
+    # Ensure user is authenticated before attempting upload. The Drive manager
+    # will raise NotAuthenticatedError if auth is missing but we proactively
+    # check and prompt the user here to provide a better UX.
         auth_manager = getattr(self.drive_manager, 'auth_manager', None)
         if auth_manager is None or not auth_manager.is_authenticated():
             reply = QMessageBox.question(
@@ -412,6 +491,88 @@ class CloudUploadWidget(QWidget):
             self.upload_button.setEnabled(False)
             self.upload_button.setText("🔄 Signing in...")
             QTimer.singleShot(100, self.do_auth_and_start_upload)
+            return
+
+        # Give the user a choice: upload now (legacy immediate behavior) or
+        # queue the upload for background processing (durable). This preserves
+        # the original UX while enabling durable queued uploads.
+        choice = QMessageBox.question(
+            self,
+            'Upload or Queue',
+            'Do you want to upload now or queue the upload to run in the background?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes,
+        )
+
+        # Yes -> Upload Now, No -> Queue, Cancel -> abort
+        if choice == QMessageBox.StandardButton.Cancel:
+            return
+
+        if choice == QMessageBox.StandardButton.Yes:
+            # Immediate upload path (existing behavior): create and start thread
+            try:
+                title = self.title_input.text().strip() or None
+                description = self.description_input.toPlainText().strip() or None
+                tags_text = self.tags_input.text().strip()
+                tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else None
+
+                # Start upload thread
+                self.upload_thread = CloudUploadThread(
+                    self.drive_manager, self.current_file_path, title, description, tags
+                )
+                self.upload_thread.progress_updated.connect(self.update_progress)
+                self.upload_thread.upload_finished.connect(self.upload_finished)
+                self.upload_thread.duplicate_detected.connect(self.on_duplicate_detected)
+
+                # Expose cancel button
+                self.cancel_button.show()
+                self.cancel_button.setEnabled(True)
+
+                # Update UI for upload state
+                self.upload_button.setEnabled(False)
+                self.upload_button.setText("🔄 Uploading...")
+                self.progress_bar.show()
+                self.progress_bar.setValue(0)
+
+                self.upload_thread.start()
+                return
+            except Exception as e:
+                QMessageBox.warning(self, 'Upload Error', f'Failed to start upload: {e}')
+                return
+
+        # Otherwise (No) -> Queue the job
+        try:
+            from .job_queue_sql import enqueue_job, JobRow
+            import uuid
+
+            title = self.title_input.text().strip() or None
+            description = self.description_input.toPlainText().strip() or None
+            tags_text = self.tags_input.text().strip()
+            tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else None
+
+            job = JobRow(
+                id=str(uuid.uuid4()),
+                file_path=self.current_file_path,
+                title=title,
+                description=description,
+                tags=tags,
+                status='pending'
+            )
+            enqueue_job(job)
+
+            # Update UI to reflect queued state
+            self.progress_bar.show()
+            self.progress_bar.setRange(0, 0)  # Indeterminate
+            self.progress_bar.setFormat('Queued')
+            self.upload_button.setEnabled(False)
+            self.upload_button.setText('📥 Queued')
+            QMessageBox.information(self, 'Queued', 'Upload queued. It will be processed in the background.')
+            # Show jobs dialog so user can inspect or cancel
+            from .job_dialog import JobDialog
+            JobDialog(self).exec()
+            return
+        except Exception as e:
+            QMessageBox.warning(self, 'Queue Error', f'Failed to enqueue upload: {e}')
             return
 
     def do_auth_and_start_upload(self):
@@ -435,31 +596,9 @@ class CloudUploadWidget(QWidget):
             self.upload_button.setEnabled(True)
             self.upload_button.setText("📤 Upload to Google Drive")
         
-        # Prepare upload data
-        title = self.title_input.text().strip() or None
-        description = self.description_input.toPlainText().strip() or None
-        tags_text = self.tags_input.text().strip()
-        tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else None
-        
-        # Start upload thread
-        self.upload_thread = CloudUploadThread(
-            self.drive_manager, self.current_file_path, title, description, tags
-        )
-        self.upload_thread.progress_updated.connect(self.update_progress)
-        self.upload_thread.upload_finished.connect(self.upload_finished)
-        self.upload_thread.duplicate_detected.connect(self.on_duplicate_detected)
-
-        # Expose cancel button
-        self.cancel_button.show()
-        self.cancel_button.setEnabled(True)
-        
-        # Update UI for upload state
-        self.upload_button.setEnabled(False)
-        self.upload_button.setText("🔄 Uploading...")
-        self.progress_bar.show()
-        self.progress_bar.setValue(0)
-        
-        self.upload_thread.start()
+        # After successful authentication, reuse start_upload flow which now
+        # enqueues the job for background processing.
+        QTimer.singleShot(100, self.start_upload)
 
     def on_duplicate_detected(self, file_id: str, name: str) -> None:
         """Prompt user when a duplicate is detected during upload."""
@@ -505,6 +644,43 @@ class CloudUploadWidget(QWidget):
             dlg.exec()
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to list jobs: {e}")
+
+    def on_choose_folder_clicked(self):
+        """Allow the user to pick or create a Drive folder to use as the recordings target."""
+        try:
+            # Ask the drive manager for top-level folders
+            try:
+                folders = self.drive_manager.list_folders()
+            except Exception:
+                folders = []
+
+            names = [f['name'] for f in folders]
+            from PySide6.QtWidgets import QInputDialog
+
+            # Offer an option to create a new folder
+            choice, ok = QInputDialog.getItem(self, "Select Folder", "Choose a target folder:", names + ["<Create new folder>"], 0, False)
+            if not ok:
+                return
+
+            if choice == "<Create new folder>":
+                name, ok2 = QInputDialog.getText(self, "Create Folder", "Folder name:")
+                if not ok2 or not name:
+                    return
+                new_id = self.drive_manager.create_folder(name)
+                if new_id:
+                    QMessageBox.information(self, "Folder Created", f"Created folder '{name}'")
+                    self.drive_manager.set_recordings_folder(new_id)
+                else:
+                    QMessageBox.warning(self, "Create Failed", "Failed to create folder on Drive")
+                return
+
+            selected = next((f for f in folders if f['name'] == choice), None)
+            if selected:
+                self.drive_manager.set_recordings_folder(selected['id'])
+                QMessageBox.information(self, "Folder Selected", f"Selected folder: {selected['name']}")
+
+        except Exception as e:
+            QMessageBox.warning(self, "Folder Error", f"Failed to choose folder: {e}")
     
     def update_progress(self, percentage: int) -> None:
         """Update upload progress"""

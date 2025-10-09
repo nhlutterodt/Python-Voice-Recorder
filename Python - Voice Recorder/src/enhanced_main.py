@@ -30,7 +30,13 @@ def start_job_worker(drive_manager: Any) -> Optional[threading.Thread]:
     from the application bootstrap after managers are available.
     """
     try:
-        if getattr(config_manager, 'enable_cloud_job_worker', False):
+        # Respect an explicit opt-out. If config_manager.enable_cloud_job_worker
+        # is missing or True, we'll attempt to start the supervisor so queued
+        # uploads are processed automatically.
+        if getattr(config_manager, 'enable_cloud_job_worker', True):
+            if drive_manager is None:
+                logger.debug('No DriveManager provided; skipping job worker start')
+                return None
             from cloud.job_queue_sql import run_worker_with_supervisor
             db_path = getattr(config_manager, 'cloud_jobs_db_path', None)
             try:

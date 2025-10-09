@@ -6,27 +6,45 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLineEdit, QMessageBox,
     QProgressBar, QTabWidget, QComboBox
 )
-from .waveform_viewer import WaveformViewer
+try:
+    from .waveform_viewer import WaveformViewer
+except Exception:
+    from waveform_viewer import WaveformViewer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QCloseEvent
 from pydub import AudioSegment  # type: ignore
 import os
 from typing import Optional, Any  # Union not used
-from .config_manager import config_manager
+try:
+    from .config_manager import config_manager
+except Exception:
+    from config_manager import config_manager
 
-from .audio_processing import (
-    AudioLoaderThread,
-    AudioTrimProcessor  # type: ignore
-)
-from .audio_recorder import AudioRecorderManager
+try:
+    from .audio_processing import (
+        AudioLoaderThread,
+        AudioTrimProcessor  # type: ignore
+    )
+except Exception:
+    from audio_processing import AudioLoaderThread, AudioTrimProcessor  # type: ignore
+try:
+    from .audio_recorder import AudioRecorderManager
+except Exception:
+    from audio_recorder import AudioRecorderManager
 from models.database import SessionLocal
 from models.recording import Recording
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts', 'utilities'))
 from version import APP_NAME, UIConstants  # type: ignore
 from core.logging_config import get_logger
-from .settings_ui import SettingsDialog
+try:
+    from .settings_ui import SettingsDialog
+except Exception:
+    from settings_ui import SettingsDialog
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QUrl
+import webbrowser
 
 # Setup logging for this module
 logger = get_logger(__name__)
@@ -114,6 +132,42 @@ class EnhancedAudioEditor(QWidget):
         except Exception as e:
             print(f"❌ Failed to initialize cloud features: {e}")
 
+    def _replace_fallback_with_cloud(self) -> None:
+        """If a fallback Cloud widget was shown, replace it with the real CloudUI after
+        a successful initialization attempt.
+        """
+        try:
+            if getattr(self, 'cloud_ui', None) is None:
+                return
+
+            # If we have a tabbed UI, swap the fallback tab with the real CloudUI
+            if getattr(self, 'tab_widget', None) is not None:
+                tw: QTabWidget = self.tab_widget
+                # Find the fallback tab if present
+                for i in range(tw.count()):
+                    w = tw.widget(i)
+                    if getattr(w, '__class__', None) and w.__class__.__name__ == 'CloudFallbackWidget':
+                        tw.removeTab(i)
+                        tw.addTab(self.cloud_ui, "☁️ Cloud Features")
+                        return
+
+            # Otherwise, if single interface and we showed a fallback widget, replace it
+            if getattr(self, 'fallback_widget', None) is not None:
+                try:
+                    fb = self.fallback_widget
+                    # Attempt to find and replace in layout
+                    parent_layout = fb.parentWidget().layout()
+                    if parent_layout is not None:
+                        parent_layout.removeWidget(fb)
+                        fb.deleteLater()
+                        parent_layout.addWidget(self.cloud_ui)
+                        self.fallback_widget = None
+                except Exception:
+                    pass
+        except Exception:
+            # Don't let UI replacement crash the app
+            pass
+
     def init_ui(self) -> None:
         """Initialize the user interface with tabs for cloud features"""
         main_layout = QVBoxLayout()
@@ -142,6 +196,8 @@ class EnhancedAudioEditor(QWidget):
         if _cloud_available and self.cloud_ui:
             self.create_tabbed_interface(main_layout)
         else:
+            # Create interfaces but include a fallback cloud widget so users can
+            # discover how to enable cloud features and attempt to initialize.
             self.create_single_interface(main_layout)
 
         self.setLayout(main_layout)
@@ -169,6 +225,8 @@ class EnhancedAudioEditor(QWidget):
     def create_tabbed_interface(self, main_layout: QVBoxLayout) -> None:
         """Create tabbed interface with cloud features"""
         tab_widget = QTabWidget()
+        # Keep a reference for dynamic replacement when cloud becomes available
+        self.tab_widget = tab_widget
         
         # Main audio tab
         audio_tab = QWidget()
@@ -231,6 +289,19 @@ class EnhancedAudioEditor(QWidget):
             notice_widget = QWidget()
             notice_widget.setLayout(notice_layout)
             main_layout.addWidget(notice_widget)
+
+            # Add a fallback cloud widget with helpful actions (Retry init, open requirements)
+            fb = None
+            try:
+                # Import the extracted fallback widget implementation
+                from cloud.cloud_fallback import CloudFallbackWidget
+
+                fb = CloudFallbackWidget(self, editor_ref=self)
+                self.fallback_widget = fb
+                main_layout.addWidget(fb)
+            except Exception:
+                # If fallback creation fails, silently continue
+                pass
         
         main_layout.addStretch()  # Push everything to top
 

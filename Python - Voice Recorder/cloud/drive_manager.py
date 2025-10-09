@@ -74,7 +74,12 @@ class GoogleDriveManager:
         if not self.service:
             credentials = self.auth_manager.get_credentials()
             build = _import_build()
-            self.service = build("drive", "v3", credentials=credentials)
+            # Avoid googleapiclient's disk-based file_cache by disabling discovery caching
+            try:
+                self.service = build("drive", "v3", credentials=credentials, cache_discovery=False)
+            except TypeError:
+                # Older googleapiclient versions may not accept cache_discovery; fall back
+                self.service = build("drive", "v3", credentials=credentials)
 
         return self.service  # type: ignore[return-value]
     
@@ -116,6 +121,53 @@ class GoogleDriveManager:
         except Exception as e:
             logging.error("Error managing recordings folder: %s", e)
             raise
+
+    def list_folders(self, parent_id: Optional[str] = None, page_size: int = 100) -> List[Dict[str, Any]]:
+        """List folders under the given parent (or top-level if None).
+
+        Returns a list of dicts with keys 'id' and 'name'.
+        """
+        try:
+            service = self._get_service()
+            if parent_id:
+                q = f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            else:
+                q = "mimeType='application/vnd.google-apps.folder' and trashed=false and 'root' in parents"
+
+            folders: List[Dict[str, Any]] = []
+            page_token = None
+            while True:
+                resp = service.files().list(q=q, fields='nextPageToken, files(id, name)', pageToken=page_token, pageSize=page_size).execute()
+                for f in resp.get('files', []):
+                    folders.append({'id': f.get('id'), 'name': f.get('name')})
+                page_token = resp.get('nextPageToken')
+                if not page_token:
+                    break
+            return folders
+        except Exception as e:
+            logging.error('Error listing folders: %s', e)
+            return []
+
+    def create_folder(self, name: str, parent_id: Optional[str] = None) -> Optional[str]:
+        """Create a folder with the given name under parent_id (or root) and return its id."""
+        try:
+            service = self._get_service()
+            metadata = {
+                'name': name,
+                'mimeType': 'application/vnd.google-apps.folder',
+            }
+            if parent_id:
+                metadata['parents'] = [parent_id]
+
+            folder = service.files().create(body=metadata, fields='id').execute()
+            return folder.get('id')
+        except Exception as e:
+            logging.error('Failed to create folder %s: %s', name, e)
+            return None
+
+    def set_recordings_folder(self, folder_id: str) -> None:
+        """Set the manager's target recordings folder id."""
+        self.recordings_folder_id = str(folder_id)
     
     def upload_recording(self, file_path: str, title: Optional[str] = None,
                          description: Optional[str] = None, tags: Optional[List[str]] = None,

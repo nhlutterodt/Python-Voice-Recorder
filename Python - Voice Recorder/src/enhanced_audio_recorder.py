@@ -11,7 +11,10 @@ import os
 import time
 from datetime import datetime
 import uuid
-from .performance_monitor import performance_monitor
+try:
+    from .performance_monitor import performance_monitor
+except Exception:
+    from performance_monitor import performance_monitor
 from core.logging_config import get_logger
 
 # PHASE 3 INTEGRATION: Enhanced Storage System
