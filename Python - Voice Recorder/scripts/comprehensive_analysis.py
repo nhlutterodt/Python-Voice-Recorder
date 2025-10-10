@@ -9,10 +9,6 @@ import tempfile
 import traceback
 from pathlib import Path
 
-# Add project root to path for imports
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-
 def validate_complete_integration():
     """Test complete integration of all our implemented components"""
     print("🔍 COMPLETE INTEGRATION VALIDATION")
@@ -20,8 +16,8 @@ def validate_complete_integration():
     
     try:
         # Test 1: All major components can be imported
-        from services.file_storage.config import StorageConfig, EnvironmentManager
-        from services.file_storage.metadata import FileMetadataCalculator
+    from voice_recorder.services.file_storage.config import StorageConfig, EnvironmentManager
+    from voice_recorder.services.file_storage.metadata import FileMetadataCalculator
         print("✅ All major components import successfully")
         
         # Test 2: Components can work together in a real scenario
