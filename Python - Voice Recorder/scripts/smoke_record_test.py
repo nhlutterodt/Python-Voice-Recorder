@@ -5,23 +5,20 @@ from pathlib import Path
 import sys
 from pathlib import Path as _Path
 
-# Ensure project src directory is on sys.path so we can import modules like audio_recorder
-project_root = _Path(__file__).resolve().parents[1]
-# Ensure project root is on sys.path so top-level packages like 'core' and 'models'
-# can be imported when running scripts from the scripts/ directory.
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+"""Smoke test script for recording path.
 
-src_dir = project_root / 'src'
-if str(src_dir) not in sys.path:
-    sys.path.insert(0, str(src_dir))
-
-from audio_recorder import AudioRecorderManager
-from models.database import SessionLocal
-from models.recording import Recording
-from services.recording_service import RecordingService
+This script prefers canonical package imports from `voice_recorder.*` so it
+behaves the same whether the project is installed or run from the repository.
+The development/test environment should set PYTHONPATH to include the repo
+root (or the app folder and src) so `voice_recorder` resolves via the
+package shim.
+"""
+from voice_recorder.audio_recorder import AudioRecorderManager
+from voice_recorder.models.database import SessionLocal
+from voice_recorder.models.recording import Recording
+from voice_recorder.services.recording_service import RecordingService
 import wave
-from models import database as _dbmod
+from voice_recorder.models import database as _dbmod
 import sqlite3
 
 
