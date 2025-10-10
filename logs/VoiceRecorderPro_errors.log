@@ -1,0 +1,26 @@
+2025-10-09 15:41:50,451 - VoiceRecorderPro.audio_recorder - ERROR - audio_recorder.py:94 - Recording failed
+Traceback (most recent call last):
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\src\audio_recorder.py", line 80, in run
+    with sd.InputStream(**stream_kwargs):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\tests\test_mid_recording_disconnect.py", line 17, in __init__
+    raise RuntimeError("Device disappeared on open")
+RuntimeError: Device disappeared on open
+2025-10-09 15:41:50,577 - VoiceRecorderPro.audio_recorder - ERROR - audio_recorder.py:94 - Recording failed
+Traceback (most recent call last):
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\src\audio_recorder.py", line 80, in run
+    with sd.InputStream(**stream_kwargs):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\tests\test_mid_recording_disconnect.py", line 71, in __exit__
+    raise RuntimeError("Device disconnected during recording")
+RuntimeError: Device disconnected during recording
+2025-10-09 15:41:50,577 - VoiceRecorderPro.audio_recorder - ERROR - audio_recorder.py:141 - Error in audio callback
+Traceback (most recent call last):
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\src\audio_recorder.py", line 130, in audio_callback
+    wav_file.writeframes(int16.tobytes())
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\tests\test_mid_recording_disconnect.py", line 118, in writeframes
+    raise RuntimeError("disk write error simulated")
+RuntimeError: disk write error simulated
+2025-10-09 15:41:50,590 - VoiceRecorderPro.src.enhanced_audio_recorder - ERROR - enhanced_audio_recorder.py:317 - Raw recordings directory is not writable
+2025-10-09 15:41:55,113 - cloud.upload_utils - ERROR - upload_utils.py:194 - Upload failed (attempt=1): upload_cancelled
+2025-10-09 15:41:55,113 - cloud.upload_utils - ERROR - upload_utils.py:194 - Upload failed (attempt=3): network

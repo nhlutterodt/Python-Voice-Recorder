@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voice-recorder"
+version = "0.0.0"
+description = "Voice Recorder Pro - application package"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["Python - Voice Recorder/src"]

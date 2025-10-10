@@ -31,10 +31,10 @@ Architecture Benefits:
 
 # Import all components from the new modular structure
 try:
-    from services.file_storage.core import EnhancedFileStorageService
-    from services.file_storage.config import StorageConfig
-    from services.file_storage.metadata import FileMetadataCalculator
-    from services.file_storage.exceptions import (
+    from voice_recorder.services.file_storage.core import EnhancedFileStorageService
+    from voice_recorder.services.file_storage.config import StorageConfig
+    from voice_recorder.services.file_storage.metadata import FileMetadataCalculator
+    from voice_recorder.services.file_storage.exceptions import (
         StorageValidationError,
         FileMetadataError,
         DatabaseSessionError,

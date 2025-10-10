@@ -11,14 +11,14 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 # Local imports for components we've migrated
-from ..exceptions import (
+from voice_recorder.services.file_storage.exceptions import (
     StorageValidationError,
     DatabaseSessionError,
     FileConstraintError,
     StorageOperationError
 )
-from ..metadata import FileMetadataCalculator
-from ..config import StorageConfig
+from voice_recorder.services.file_storage.metadata import FileMetadataCalculator
+from voice_recorder.services.file_storage.config import StorageConfig
 
 # External imports with fallbacks
 try:
@@ -39,27 +39,19 @@ except ImportError:
 
 # Database imports with fallbacks for testing
 try:
-    from ....core.database_context import DatabaseContextManager
-    from ....core.database_health import DatabaseHealthMonitor
-    from ....core.logging_config import logger
-    # Try to import recording model via relative import first
+    from voice_recorder.core.database_context import DatabaseContextManager
+    from voice_recorder.core.database_health import DatabaseHealthMonitor
+    from voice_recorder.core.logging_config import logger
     try:
-        from ....models.recording import Recording
+        from voice_recorder.models.recording import Recording
     except Exception:
-        # Fallback to absolute import from project root if relative fails
-        try:
-            from models.recording import Recording
-        except Exception:
-            Recording = None
+        Recording = None
 except ImportError:
     # Fallback for testing when core packages are not available
     DatabaseContextManager = type('DatabaseContextManager', (), {})
     DatabaseHealthMonitor = type('DatabaseHealthMonitor', (), {})
-    
-    # Simple logger fallback
     import logging
     logger = logging.getLogger(__name__)
-    
     Recording = None
 
 # If Recording couldn't be imported, provide a lightweight fallback so tests

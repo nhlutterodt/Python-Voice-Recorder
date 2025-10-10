@@ -80,11 +80,18 @@ class StorageConfig:
     def _try_import(self, module_name: str, class_name: str):
         """Try to import a class from a module with proper error handling."""
         try:
-            module = importlib.import_module(f'.{module_name}', package='services.file_storage.config')
+            # Prefer package-root absolute imports to avoid ambiguity when
+            # the application is run as a package or via scripts.
+            module = importlib.import_module(f'voice_recorder.services.file_storage.config.{module_name}')
             return getattr(module, class_name)
-        except (ImportError, AttributeError) as e:
-            logger.warning(f"Failed to import {class_name} from {module_name}: {e}")
-            return None
+        except (ImportError, AttributeError):
+            try:
+                # Fallback to relative import for compatibility in dev/test environments
+                module = importlib.import_module(f'.{module_name}', package='services.file_storage.config')
+                return getattr(module, class_name)
+            except (ImportError, AttributeError) as e:
+                logger.warning(f"Failed to import {class_name} from {module_name}: {e}")
+                return None
 
     def _import_components(self) -> None:
         """Import storage configuration components with fallback handling."""

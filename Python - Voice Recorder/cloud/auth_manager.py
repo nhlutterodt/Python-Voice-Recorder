@@ -339,7 +339,7 @@ class GoogleAuthManager:
         # to be present immediately after construction.
         if self.config_manager is None:
             try:
-                from config_manager import config_manager as _cfg_mgr  # type: ignore
+                from ..config_manager import config_manager as _cfg_mgr  # type: ignore
                 self.config_manager = _cfg_mgr
             except Exception:
                 # If import fails, leave self.config_manager as None and fall back to file
