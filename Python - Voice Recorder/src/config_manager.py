@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
-from core.logging_config import get_logger
+from voice_recorder.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -325,3 +325,17 @@ google_config = config_manager.google_config
 def get_config() -> ConfigManager:
     """Get the global configuration manager instance"""
     return config_manager
+
+
+# Ensure the module object is available under both top-level and package-scoped
+# module names so importing either 'config_manager' or
+# 'voice_recorder.config_manager' returns the same module instance.
+try:
+    import sys
+    this_mod = sys.modules.get(__name__)
+    if this_mod is not None:
+        sys.modules['config_manager'] = this_mod
+        sys.modules['voice_recorder.config_manager'] = this_mod
+except Exception:
+    # Best-effort; do not raise during import
+    pass

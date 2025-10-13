@@ -54,8 +54,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from core.database_context import DatabaseContextManager, DBContextProtocol
-from models import database as app_db_mod
+from voice_recorder.core.database_context import DatabaseContextManager, DBContextProtocol
+from voice_recorder.models import database as app_db_mod
 
 
 @pytest.fixture()
@@ -120,7 +120,7 @@ if str(SRC) not in sys.path:
 import shutil
 import pytest
 from pathlib import Path
-from models.database import Base, engine
+from voice_recorder.models.database import Base, engine
 
 # Prevent pytest from trying to collect the standalone comprehensive auth test
 # (it provides its own TestRunner and is meant to be executed directly).

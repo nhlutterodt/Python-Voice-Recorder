@@ -4,9 +4,9 @@ import os
 import sqlite3
 from pathlib import Path
 
-# Import models.database to get the DATABASE_URL and engine resolution
+# Import voice_recorder.models.database to get the DATABASE_URL and engine resolution
 try:
-    from models import database as mdb
+    from voice_recorder.models import database as mdb
     DATABASE_URL = getattr(mdb, 'DATABASE_URL', None)
 except Exception as e:
     DATABASE_URL = None

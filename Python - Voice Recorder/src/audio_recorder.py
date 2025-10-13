@@ -12,17 +12,13 @@ import time
 import traceback
 from datetime import datetime
 import uuid
-try:
-    from .performance_monitor import performance_monitor
-except Exception:
-    # Allow importing when src is on PYTHONPATH and modules are loaded as top-level
-    from performance_monitor import performance_monitor
-from core.logging_config import get_logger
+from voice_recorder.performance_monitor import performance_monitor
+from voice_recorder.core.logging_config import get_logger
 import threading
 
 # When running headless (scripts/tests) persist recordings to DB automatically
 try:
-    from services.recording_service import RecordingService
+    from voice_recorder.services.recording_service import RecordingService
 except Exception:
     RecordingService = None
 
@@ -560,7 +556,7 @@ class AudioRecorderManager(QObject):
         if not has_qt_app and RecordingService is not None:
             try:
                 # inject the app db_context so the service uses the same DB as the app
-                from models.database import db_context as app_db_context
+                from voice_recorder.models.database import db_context as app_db_context
                 svc = RecordingService(db_ctx=app_db_context)
                 svc.create_from_file(file_path)
                 logger.info("Auto-persisted recording metadata for %s", file_path)

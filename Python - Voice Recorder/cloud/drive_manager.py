@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, TypedDict
 from datetime import datetime
 
-from .exceptions import NotAuthenticatedError, APILibrariesMissingError, DuplicateFoundError
+from voice_recorder.cloud.exceptions import NotAuthenticatedError, APILibrariesMissingError, DuplicateFoundError
 
 # Type checking imports removed - using lazy imports with helper functions instead
 
@@ -194,7 +194,7 @@ class GoogleDriveManager:
             # legacy code) receive the id instead of creating a duplicate.
             ch = None
             try:
-                from .dedupe import compute_content_sha256
+                from voice_recorder.cloud.dedupe import compute_content_sha256
                 ch = compute_content_sha256(file_path)
             except Exception:
                 ch = None
@@ -229,7 +229,7 @@ class GoogleDriveManager:
                 mime_type = 'audio/wav'  # Default for audio files
             
             # Build canonical metadata including appProperties using a shared helper
-            from .metadata_schema import build_upload_metadata
+            from voice_recorder.cloud.metadata_schema import build_upload_metadata
 
             metadata = build_upload_metadata(
                 file_path,
@@ -286,7 +286,7 @@ class GoogleDriveManager:
         try:
             # Lazy-import the adapter to avoid import-time cycles and keep
             # runtime behavior identical when cloud libs are missing.
-            from .google_uploader import GoogleDriveUploader
+            from voice_recorder.cloud.google_uploader import GoogleDriveUploader
 
             uploader = GoogleDriveUploader(self)
             # upload() returns a typed UploadResult or raises on error.
@@ -308,7 +308,7 @@ class GoogleDriveManager:
         improved error semantics. This is a convenience method and does
         a lazy import of the adapter.
         """
-        from .google_uploader import GoogleDriveUploader
+        from voice_recorder.cloud.google_uploader import GoogleDriveUploader
 
         return GoogleDriveUploader(self)
         
@@ -488,8 +488,8 @@ class GoogleDriveManager:
 
 # Example usage
 if __name__ == "__main__":
-    from cloud.auth_manager import GoogleAuthManager
-    from config_manager import config_manager
+    from voice_recorder.cloud.auth_manager import GoogleAuthManager
+    from voice_recorder.config_manager import config_manager
     
     # Initialize managers
     auth_manager = GoogleAuthManager(use_keyring=config_manager.prefers_keyring())

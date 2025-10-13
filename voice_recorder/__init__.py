@@ -27,3 +27,26 @@ if _src.exists():
     __path__.insert(0, str(_src))
 
 __all__ = []
+
+# Ensure common top-level modules are aliased to the package modules so the
+# same module object is used whether code imports `config_manager` or
+# `voice_recorder.config_manager`. This prevents duplicate-singleton issues
+# during tests that import modules by different names.
+try:
+    import sys
+    # Coalesce config_manager module objects so imports by either name refer
+    # to the same module instance. Prefer the package-scoped module if it
+    # exists (so voice_recorder.config_manager is authoritative).
+    pkg_name = 'voice_recorder.config_manager'
+    top_name = 'config_manager'
+    pkg_mod = sys.modules.get(pkg_name)
+    top_mod = sys.modules.get(top_name)
+    if pkg_mod is not None:
+        # Make top-level name point to package module (overwrite if necessary)
+        sys.modules[top_name] = pkg_mod
+    elif top_mod is not None:
+        # Package module not loaded yet; ensure package name points to top-level module
+        sys.modules[pkg_name] = top_mod
+except Exception:
+    # Don't fail package import for any reason here; best-effort aliasing only.
+    pass

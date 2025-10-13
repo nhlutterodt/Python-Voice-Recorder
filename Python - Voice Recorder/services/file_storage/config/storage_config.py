@@ -297,7 +297,7 @@ class StorageConfig:
                     cfg = self._StoragePathConfig(
                         base_path=self.base_path
                     )
-                    from .path_management import StoragePathManager
+                    from voice_recorder.services.file_storage.config.path_management import StoragePathManager
                     self._path_manager = StoragePathManager(cfg)
                 else:
                     self._path_manager = None
@@ -369,7 +369,7 @@ class StorageConfig:
     def validate_path_permissions(self) -> Dict[str, Any]:
         """Validate permissions for configured storage paths (Phase 2 API)."""
         try:
-            from .path_management import PathValidator
+            from voice_recorder.services.file_storage.config.path_management import PathValidator
             # Validate base paths via the PathValidator utility
             results = {}
             for name, p in self.get_configuration_summary().get('paths', {}).items():

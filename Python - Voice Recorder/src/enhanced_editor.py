@@ -6,42 +6,27 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLineEdit, QMessageBox,
     QProgressBar, QTabWidget, QComboBox
 )
-try:
-    from .waveform_viewer import WaveformViewer
-except Exception:
-    from waveform_viewer import WaveformViewer
+from voice_recorder.waveform_viewer import WaveformViewer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QCloseEvent
 from pydub import AudioSegment  # type: ignore
 import os
 from typing import Optional, Any  # Union not used
-try:
-    from .config_manager import config_manager
-except Exception:
-    from config_manager import config_manager
+from voice_recorder.config_manager import config_manager
 
-try:
-    from .audio_processing import (
-        AudioLoaderThread,
-        AudioTrimProcessor  # type: ignore
-    )
-except Exception:
-    from audio_processing import AudioLoaderThread, AudioTrimProcessor  # type: ignore
-try:
-    from .audio_recorder import AudioRecorderManager
-except Exception:
-    from audio_recorder import AudioRecorderManager
-from models.database import SessionLocal
-from models.recording import Recording
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts', 'utilities'))
-from version import APP_NAME, UIConstants  # type: ignore
-from core.logging_config import get_logger
-try:
-    from .settings_ui import SettingsDialog
-except Exception:
-    from settings_ui import SettingsDialog
+from voice_recorder.audio_processing import AudioLoaderThread, AudioTrimProcessor  # type: ignore
+from voice_recorder.audio_recorder import AudioRecorderManager
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # For type-checkers only; at runtime import models lazily to avoid
+    # SQLAlchemy mapped-class registration during module import.
+    from voice_recorder.models.database import SessionLocal  # type: ignore
+    from voice_recorder.models.recording import Recording  # type: ignore
+from voice_recorder.scripts.utilities.version import APP_NAME, UIConstants  # type: ignore
+from voice_recorder.core.logging_config import get_logger
+from voice_recorder.settings_ui import SettingsDialog
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QUrl
 import webbrowser
@@ -52,10 +37,10 @@ logger = get_logger(__name__)
 # Cloud integration (optional import to handle missing dependencies gracefully)
 _cloud_available = False
 try:
-    from cloud.auth_manager import GoogleAuthManager
-    from cloud.drive_manager import GoogleDriveManager
-    from cloud.feature_gate import FeatureGate
-    from cloud.cloud_ui import CloudUI
+    from voice_recorder.cloud.auth_manager import GoogleAuthManager
+    from voice_recorder.cloud.drive_manager import GoogleDriveManager
+    from voice_recorder.cloud.feature_gate import FeatureGate
+    from voice_recorder.cloud.cloud_ui import CloudUI
     _cloud_available = True
 except ImportError as e:
     print(f"ℹ️ Cloud features not available: {e}")
@@ -294,7 +279,7 @@ class EnhancedAudioEditor(QWidget):
             fb = None
             try:
                 # Import the extracted fallback widget implementation
-                from cloud.cloud_fallback import CloudFallbackWidget
+                from voice_recorder.cloud.cloud_fallback import CloudFallbackWidget
 
                 fb = CloudFallbackWidget(self, editor_ref=self)
                 self.fallback_widget = fb
@@ -962,15 +947,28 @@ class EnhancedAudioEditor(QWidget):
             self.recording_status.setText(UIConstants.READY_TO_RECORD)
 
     def save_recording_metadata(self, file_path: str, duration: float):
-        """Save recording metadata to database"""
+        """Save recording metadata to database.
+
+        Import the DB session and model lazily so importing this module does not
+        register SQLAlchemy mappings at import time (prevents duplicate-table
+        errors during import-only validation runs).
+        """
+        try:
+            from voice_recorder.models.database import SessionLocal as _SessionLocal
+            from voice_recorder.models.recording import Recording as _Recording
+        except Exception as e:
+            # DB/models unavailable in this environment (e.g., limited test runner)
+            print(f"⚠️ DB models unavailable, skipping metadata save: {e}")
+            return
+
         try:
             filename = os.path.basename(file_path)
-            with SessionLocal() as db:
-                recording = Recording(
+            with _SessionLocal() as db:
+                recording = _Recording(
                     filename=filename,
-                    stored_filename=filename,  # Fix: Add the required stored_filename
+                    stored_filename=filename,
                     duration=duration,
-                    status="active"
+                    status="active",
                 )
                 db.add(recording)
                 db.commit()

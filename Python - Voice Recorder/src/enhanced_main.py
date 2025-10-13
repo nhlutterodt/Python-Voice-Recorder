@@ -6,19 +6,12 @@ from PySide6.QtWidgets import QApplication
 
 # Support running as a module (python -m src.enhanced_main) and as a
 # script by preferring package-relative imports with absolute fallbacks.
-try:
-    from .enhanced_editor import EnhancedAudioEditor
-    from .config_manager import config_manager
-except Exception:
-    from enhanced_editor import EnhancedAudioEditor
-    from config_manager import config_manager
+from voice_recorder.enhanced_editor import EnhancedAudioEditor
+from voice_recorder.config_manager import config_manager
 import argparse
-try:
-    from models.database import engine, Base
-    from core.logging_config import setup_application_logging
-except Exception:
-    from .models.database import engine, Base
-    from .core.logging_config import setup_application_logging
+# Defer importing SQLAlchemy engine/Base until runtime to avoid import-time
+# side-effects during import-only validation runs.
+from voice_recorder.core.logging_config import setup_application_logging
 from typing import Optional, Any
 import threading
 
@@ -37,7 +30,10 @@ def start_job_worker(drive_manager: Any) -> Optional[threading.Thread]:
             if drive_manager is None:
                 logger.debug('No DriveManager provided; skipping job worker start')
                 return None
-            from cloud.job_queue_sql import run_worker_with_supervisor
+            # Import the job worker module using the canonical package-root path
+            # to avoid ambiguous module identities when running as a script vs
+            # package. Keep this import local/lazy to avoid import-time DB side-effects.
+            from voice_recorder.cloud.job_queue_sql import run_worker_with_supervisor
             db_path = getattr(config_manager, 'cloud_jobs_db_path', None)
             try:
                 return run_worker_with_supervisor(drive_manager, db_path=db_path)

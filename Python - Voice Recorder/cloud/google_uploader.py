@@ -4,9 +4,9 @@ from typing import Optional, Callable, TypedDict, Any
 import threading
 import logging
 
-from .uploader import Uploader, UploadProgress, UploadResult
-from .upload_utils import chunked_upload_with_progress, TransientUploadError
-from .exceptions import NotAuthenticatedError, APILibrariesMissingError, UploadError, DuplicateFoundError
+from voice_recorder.cloud.uploader import Uploader, UploadProgress, UploadResult
+from voice_recorder.cloud.upload_utils import chunked_upload_with_progress, TransientUploadError
+from voice_recorder.cloud.exceptions import NotAuthenticatedError, APILibrariesMissingError, UploadError, DuplicateFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class GoogleDriveUploader(Uploader):
             # (unless caller explicitly forces upload). Any auth/library errors
             # should surface from the manager's helpers.
             try:
-                from .dedupe import compute_content_sha256
+                from voice_recorder.cloud.dedupe import compute_content_sha256
                 ch = compute_content_sha256(file_path)
                 if ch:
                     finder = getattr(self.drive_manager, 'find_duplicate_by_content_sha256', None)
@@ -69,7 +69,7 @@ class GoogleDriveUploader(Uploader):
                 service = self.drive_manager._get_service()
                 folder_id = self.drive_manager._ensure_recordings_folder()
 
-                from .metadata_schema import build_upload_metadata
+                from voice_recorder.cloud.metadata_schema import build_upload_metadata
 
                 metadata = build_upload_metadata(
                     file_path,
@@ -87,7 +87,7 @@ class GoogleDriveUploader(Uploader):
                     if callable(get_http):
                         media_cls = get_http()[0]
                     else:
-                        from .drive_manager import _import_http as _module_import_http
+                        from voice_recorder.cloud.drive_manager import _import_http as _module_import_http
                         media_cls = _module_import_http()[0]
                     # Respect configured chunk_size for MediaFileUpload if provided
                     chunksize = getattr(self, 'chunk_size', None)

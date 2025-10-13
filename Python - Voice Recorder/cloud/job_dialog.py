@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from .job_queue_sql import get_all_jobs, update_job_status
+from voice_recorder.cloud.job_queue_sql import get_all_jobs, update_job_status
 
 
 class JobDialog(QDialog):
@@ -92,7 +92,7 @@ class JobDialog(QDialog):
         if not ids:
             QMessageBox.information(self, "No selection", "No jobs selected to cancel")
             return
-        from .job_queue_sql import set_job_cancel_requested
+        from voice_recorder.cloud.job_queue_sql import set_job_cancel_requested
         for job_id in ids:
             try:
                 # Ask the running worker to cancel gracefully; also mark status as cancelled

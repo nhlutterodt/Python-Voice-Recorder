@@ -10,18 +10,18 @@ from pathlib import Path
 
 # Add the project root to Python path
 project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
 
-from models.database import db_context
-from core.database_health import DatabaseHealthMonitor
-from services.enhanced_file_storage import (
+# Use canonical package-root imports so this module can be imported with PYTHONPATH
+# set to the project root/app dir.
+from voice_recorder.models import database as mdb
+db_context = getattr(mdb, 'db_context', None)
+from voice_recorder.core.database_health import DatabaseHealthMonitor
+from voice_recorder.services.enhanced_file_storage import (
     EnhancedFileStorageService, DatabaseSessionError, FileConstraintError, StorageOperationError,
     StorageValidationError
 )
-from core.logging_config import setup_application_logging
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
-from performance_monitor import PerformanceBenchmark
+from voice_recorder.core.logging_config import setup_application_logging
+from voice_recorder.performance_monitor import PerformanceBenchmark
 
 # Setup logging
 logger = setup_application_logging("INFO")

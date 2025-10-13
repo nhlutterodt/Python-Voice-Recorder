@@ -23,7 +23,7 @@ from sqlalchemy.exc import (
 from sqlalchemy import text
 import psutil
 
-from core.logging_config import get_logger
+from voice_recorder.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 

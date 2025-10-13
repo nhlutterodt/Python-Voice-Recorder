@@ -8,13 +8,13 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from services.file_storage.config.constraints import (
+from voice_recorder.services.file_storage.config.constraints import (
     ConstraintConfig,
     StorageConstraints,
     ConstraintValidator,
-    create_constraints_from_environment
+    create_constraints_from_environment,
 )
-from services.file_storage.config.environment import EnvironmentConfig
+from voice_recorder.services.file_storage.config.environment import EnvironmentConfig
 
 
 class TestConstraintConfig:
@@ -185,7 +185,7 @@ class TestStorageConstraints:
                 assert 'approaching maximum' in result['warnings'][0]
                 assert result['file_size_mb'] == 800.0
     
-    @patch('services.file_storage.config.constraints.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.constraints.StorageInfoCollector')
     def test_validate_disk_space_for_file_sufficient_space(self, mock_collector_class):
         """Test disk space validation with sufficient space"""
         # Mock storage info
@@ -206,7 +206,7 @@ class TestStorageConstraints:
             assert result['disk_space_check_enabled'] is True
             assert result['available_space_mb'] == 2000
     
-    @patch('services.file_storage.config.constraints.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.constraints.StorageInfoCollector')
     def test_validate_disk_space_for_file_insufficient_space(self, mock_collector_class):
         """Test disk space validation with insufficient space"""
         # Mock storage info with low space
@@ -244,7 +244,7 @@ class TestStorageConstraints:
         assert result['disk_space_check_enabled'] is False
         assert 'Disk space checking disabled' in result['message']
     
-    @patch('services.file_storage.config.constraints.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.constraints.StorageInfoCollector')
     def test_validate_storage_capacity_healthy(self, mock_collector_class):
         """Test storage capacity validation with healthy storage"""
         # Mock healthy storage
@@ -262,7 +262,7 @@ class TestStorageConstraints:
         assert result['health_status'] == 'healthy'
         assert result['utilization_percent'] == (1000 / 3000 * 100)
     
-    @patch('services.file_storage.config.constraints.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.constraints.StorageInfoCollector')
     def test_validate_storage_capacity_critical(self, mock_collector_class):
         """Test storage capacity validation with critical storage"""
         # Mock critical storage
@@ -307,7 +307,7 @@ class TestConstraintValidator:
         constraints = StorageConstraints(constraint_config)
         self.validator = ConstraintValidator(constraints)
     
-    @patch('services.file_storage.config.constraints.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.constraints.StorageInfoCollector')
     def test_validate_file_complete_valid(self, mock_collector_class):
         """Test complete file validation with valid file"""
         # Mock storage info
@@ -346,7 +346,7 @@ class TestConstraintValidator:
                 except (PermissionError, FileNotFoundError):
                     pass
     
-    @patch('services.file_storage.config.constraints.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.constraints.StorageInfoCollector')
     def test_validate_before_operation_valid(self, mock_collector_class):
         """Test pre-operation validation with valid conditions"""
         # Mock healthy storage
@@ -365,7 +365,7 @@ class TestConstraintValidator:
         assert result['estimated_size_mb'] == 50.0
         assert len(result['errors']) == 0
     
-    @patch('services.file_storage.config.constraints.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.constraints.StorageInfoCollector')
     def test_validate_before_operation_oversized(self, mock_collector_class):
         """Test pre-operation validation with oversized operation"""
         # Mock storage
@@ -383,7 +383,7 @@ class TestConstraintValidator:
         assert 'exceeds maximum file size' in result['errors'][0]
         assert result['estimated_size_mb'] == 1500.0
     
-    @patch('services.file_storage.config.constraints.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.constraints.StorageInfoCollector')
     def test_validate_before_operation_approaching_limit(self, mock_collector_class):
         """Test pre-operation validation with size approaching limit"""
         # Mock storage
@@ -401,7 +401,7 @@ class TestConstraintValidator:
         assert len(result['warnings']) > 0
         assert 'approaching maximum file size' in result['warnings'][0]
     
-    @patch('services.file_storage.config.constraints.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.constraints.StorageInfoCollector')
     def test_validate_before_operation_large_file_recommendations(self, mock_collector_class):
         """Test pre-operation validation recommendations for large files"""
         # Mock storage
@@ -423,7 +423,7 @@ class TestConstraintValidator:
 class TestCreateConstraintsFromEnvironment:
     """Test convenience function for creating constraints from environment"""
     
-    @patch('services.file_storage.config.constraints.EnvironmentManager')
+    @patch('voice_recorder.services.file_storage.config.constraints.EnvironmentManager')
     def test_create_constraints_from_environment(self, mock_env_manager_class):
         """Test creating constraints from environment name"""
         # Mock environment manager
@@ -456,7 +456,7 @@ class TestIntegrationConstraints:
     def test_full_constraint_workflow(self):
         """Test complete constraint validation workflow"""
         # Create constraints for testing environment
-        with patch('services.file_storage.config.constraints.EnvironmentManager') as mock_env_manager_class:
+    with patch('voice_recorder.services.file_storage.config.constraints.EnvironmentManager') as mock_env_manager_class:
             # Mock environment manager
             mock_env_manager = MagicMock()
             mock_env_config = EnvironmentConfig(

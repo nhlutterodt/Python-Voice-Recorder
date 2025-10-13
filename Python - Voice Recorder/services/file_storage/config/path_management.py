@@ -12,7 +12,7 @@ import os
 import stat
 import platform
 
-from ..exceptions import StorageConfigValidationError
+from voice_recorder.services.file_storage.exceptions import StorageConfigValidationError
 
 
 class StoragePathType(Enum):

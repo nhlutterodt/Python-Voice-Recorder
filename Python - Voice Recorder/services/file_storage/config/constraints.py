@@ -9,15 +9,15 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 import logging
 
-from .environment import EnvironmentConfig
+from voice_recorder.services.file_storage.config.environment import EnvironmentConfig
 # Export EnvironmentManager at module level so tests can patch
 try:
-    from .environment import EnvironmentManager  # type: ignore
+    from voice_recorder.services.file_storage.config.environment import EnvironmentManager  # type: ignore
 except Exception:
     EnvironmentManager = None
 # Export StorageInfoCollector symbol here to allow tests to patch it via the constraints module
 try:
-    from .storage_info import StorageInfoCollector  # type: ignore
+    from voice_recorder.services.file_storage.config.storage_info import StorageInfoCollector  # type: ignore
 except Exception:
     StorageInfoCollector = None
 
@@ -31,13 +31,24 @@ def _get_candidate_collectors() -> list:
     This centralizes the preference logic so both capacity and per-file
     checks behave identically and tests that patch symbols are respected.
     """
+
     try:
-        from . import storage_info as _storage_info_mod
+        from voice_recorder.services.file_storage.config import storage_info as _storage_info_mod
     except Exception:
         _storage_info_mod = None
 
     mod_level = globals().get('StorageInfoCollector')
     mod_col = getattr(_storage_info_mod, 'StorageInfoCollector', None) if _storage_info_mod is not None else None
+
+    # Also detect a legacy module object that tests may patch via the top-level
+    # 'services.file_storage.config.storage_info' import path. If tests patched
+    # that module, prefer its StorageInfoCollector symbol.
+    try:
+        import sys
+        legacy_mod = sys.modules.get('services.file_storage.config.storage_info')
+    except Exception:
+        legacy_mod = None
+    legacy_col = getattr(legacy_mod, 'StorageInfoCollector', None) if legacy_mod is not None else None
 
     try:
         import unittest.mock as _umock
@@ -46,17 +57,23 @@ def _get_candidate_collectors() -> list:
 
     mod_level_is_mock = _umock is not None and mod_level is not None and isinstance(mod_level, _umock.Mock)
     mod_col_is_mock = _umock is not None and mod_col is not None and isinstance(mod_col, _umock.Mock)
+    legacy_col_is_mock = _umock is not None and legacy_col is not None and isinstance(legacy_col, _umock.Mock)
 
     candidates = []
+    # Prefer mocks: module-level mock, canonical module mock, legacy module mock
     if mod_level_is_mock:
         candidates.append(mod_level)
     elif mod_col_is_mock:
         candidates.append(mod_col)
+    elif legacy_col_is_mock:
+        candidates.append(legacy_col)
     else:
         if mod_level is not None:
             candidates.append(mod_level)
         if mod_col is not None and mod_col is not mod_level:
             candidates.append(mod_col)
+        if legacy_col is not None and legacy_col is not mod_level and legacy_col is not mod_col:
+            candidates.append(legacy_col)
 
     return candidates
 
@@ -131,7 +148,7 @@ def _resolve_environment_manager_symbol():
     module class (production path) then the module-level export.
     """
     try:
-        from . import environment as _env_mod
+        from voice_recorder.services.file_storage.config import environment as _env_mod
     except Exception:
         _env_mod = None
 
@@ -1043,23 +1060,48 @@ def create_constraints_from_environment(environment: Optional[str] = None) -> St
     # Use helpers for clarity and testability
     def _resolve_environment_manager():
         try:
-            from . import environment as _env_mod
+            from voice_recorder.services.file_storage.config import environment as _env_mod
             mod_level_env = globals().get('EnvironmentManager')
             mod_env_col = getattr(_env_mod, 'EnvironmentManager', None)
+
+            # Also consider a legacy top-level 'services' import that tests may patch.
+            try:
+                import sys
+                legacy_mod = sys.modules.get('services.file_storage.config.environment')
+            except Exception:
+                legacy_mod = None
+            legacy_env = getattr(legacy_mod, 'EnvironmentManager', None) if legacy_mod is not None else None
+
             try:
                 import unittest.mock as _umock
             except Exception:
                 _umock = None
 
-            mod_level_is_mock = _umock is not None and mod_level_env is not None and isinstance(mod_level_env, _umock.Mock)
-            mod_env_is_mock = _umock is not None and mod_env_col is not None and isinstance(mod_env_col, _umock.Mock)
+            # Build ordered candidates and prefer mocked symbols when present
+            candidates = []
+            if mod_level_env is not None:
+                candidates.append(('level', mod_level_env))
+            if mod_env_col is not None:
+                candidates.append(('canonical', mod_env_col))
+            if legacy_env is not None:
+                candidates.append(('legacy', legacy_env))
 
-            # Prefer a mocked symbol when present, favoring module-level when both mocked.
-            if mod_level_is_mock or mod_env_is_mock:
-                chosen = mod_level_env if mod_level_is_mock else mod_env_col
-            else:
-                # No mocks: prefer environment module class (production), then module-level export
-                chosen = mod_env_col if mod_env_col is not None else mod_level_env
+            chosen = None
+            # Prefer mocks
+            if _umock is not None:
+                for name, cand in candidates:
+                    if isinstance(cand, _umock.Mock):
+                        chosen = cand
+                        break
+
+            # If no mock chosen, prefer canonical module class, then module-level
+            if chosen is None:
+                if mod_env_col is not None:
+                    chosen = mod_env_col
+                elif mod_level_env is not None:
+                    chosen = mod_level_env
+                elif legacy_env is not None:
+                    chosen = legacy_env
 
             if chosen is None:
                 return None

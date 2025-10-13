@@ -12,7 +12,7 @@ from datetime import datetime
 from contextlib import contextmanager
 
 from pydub import AudioSegment  # type: ignore
-from ..exceptions import FileMetadataError
+from voice_recorder.services.file_storage.exceptions import FileMetadataError
 
 
 class FileMetadataCalculator:

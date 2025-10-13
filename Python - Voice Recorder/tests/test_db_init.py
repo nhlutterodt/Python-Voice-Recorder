@@ -8,8 +8,8 @@ def test_dev_create_all_registers_models(tmp_path):
     engine = create_engine(f"sqlite:///{db_file.as_posix()}")
 
     # Import models (this should register them on Base)
-    import models.recording  # noqa: F401
-    from models import database as mdb
+    import voice_recorder.models.recording  # noqa: F401
+    from voice_recorder.models import database as mdb
 
     # Create tables on the temp engine
     mdb.Base.metadata.create_all(bind=engine)

@@ -68,8 +68,10 @@ if Recording is None:
 
 # Performance monitoring (optional)
 try:
-    from ....performance_monitor import PerformanceBenchmark
-except ImportError:
+    # Use canonical package import to avoid multi-name module loading during tests
+    from voice_recorder.performance_monitor import PerformanceBenchmark
+except Exception:
+    # Keep a non-fatal fallback for lightweight test environments
     PerformanceBenchmark = None
 
 

@@ -20,7 +20,7 @@ try:
     # operates on the same sqlite file as the rest of the app when no
     # explicit db_path is passed. Import locally to avoid import cycles at
     # higher levels.
-    from models import database as _app_db
+    from voice_recorder.models import database as _app_db
 
     if isinstance(_app_db.DATABASE_URL, str) and _app_db.DATABASE_URL.startswith('sqlite:///'):
         # Convert SQLAlchemy sqlite URL to a filesystem path the sqlite3

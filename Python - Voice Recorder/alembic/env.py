@@ -20,7 +20,7 @@ src_path = os.path.join(project_root, 'src')
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-from models.database import Base  # noqa: E402
+from voice_recorder.models.database import Base  # noqa: E402
 import models.recording as recording_model  # noqa: E402
 
 # set target metadata for 'autogenerate' support
@@ -73,7 +73,7 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Import your models
-from models.database import Base
+from voice_recorder.models.database import Base
 # Make sure to import all models so they're in metadata
 
 # this is the Alembic Config object, which provides

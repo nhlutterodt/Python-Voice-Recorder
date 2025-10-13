@@ -8,9 +8,8 @@ Prefer using Alembic for production migrations.
 from pathlib import Path
 import logging
 
-# Import models so they are registered on the declarative Base
-from models import recording  # noqa: F401 (module import registers model)
-from models import database as mdb
+# Import models inside main() so import-time side-effects (SQLAlchemy table
+# registration) don't run when this module is imported for smoke checks.
 from sqlalchemy import inspect
 
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
+    # Import models here to register them against the declarative Base.
+    from voice_recorder.models import recording  # noqa: F401 (module import registers model)
+    from voice_recorder.models import database as mdb
+
     logger.info("Using DATABASE_URL=%s", getattr(mdb, "DATABASE_URL", "<unset>"))
     logger.info("Registering models and creating tables (development only).")
     try:

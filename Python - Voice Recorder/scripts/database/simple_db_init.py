@@ -3,12 +3,10 @@
 Simple database initialization for validation purposes
 """
 
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from sqlalchemy import create_engine
-from models.database import Base
+from voice_recorder.models import database as app_db
+Base = getattr(app_db, 'Base', None)
 
 def create_test_database():
     """Create database tables for testing purposes"""

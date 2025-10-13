@@ -15,9 +15,9 @@ from enum import Enum
 from sqlalchemy import text
 import psutil
 
-from models.database import engine, DATABASE_URL
-import core.database_context as database_context
-from core.logging_config import get_logger
+from voice_recorder.models.database import engine, DATABASE_URL
+from voice_recorder.core import database_context
+from voice_recorder.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 

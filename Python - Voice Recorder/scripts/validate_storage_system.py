@@ -11,9 +11,7 @@ import traceback
 import argparse
 from pathlib import Path
 
-# Add project root to path for imports
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+# Use canonical package imports (voice_recorder.*). Do not modify sys.path here.
 
 
 def check_phase_implementation(phase_num):
@@ -78,26 +76,27 @@ def validate_phase_1_module_structure():
 def validate_phase_1_imports():
     """Validate that all Phase 1 imports work correctly"""
     print("\n🔍 VALIDATING PHASE 1 IMPORTS...")
-    
     try:
         # Test environment module imports
-        from services.file_storage.config.environment import Environment, EnvironmentConfig, EnvironmentManager
+        from voice_recorder.services.file_storage.config.environment import (
+            Environment, EnvironmentConfig, EnvironmentManager
+        )
         print("  ✅ Environment module imports successful")
-        
+
         # Test config module imports
-        from services.file_storage.config import StorageConfig, EnvironmentManager as EM
+        from voice_recorder.services.file_storage.config import StorageConfig, EnvironmentManager as EM
         print("  ✅ Config module imports successful")
-        
+
         # Test backward compatibility imports
         try:
-            from services.file_storage.config import Environment as Env
-            from services.enhanced_file_storage import StorageConfig as SC
+            from voice_recorder.services.file_storage.config import Environment as Env
+            from voice_recorder.services.enhanced_file_storage import StorageConfig as SC
             print("  ✅ Backward compatibility imports successful")
         except ImportError:
             print("  ⚠️ Some backward compatibility imports not available (may be expected)")
-        
+
         return True
-        
+
     except ImportError as e:
         print(f"  ❌ Import error: {e}")
         traceback.print_exc()
@@ -111,10 +110,9 @@ def validate_phase_1_imports():
 def validate_environment_enum():
     """Validate Environment enum functionality"""
     print("\n🔍 VALIDATING ENVIRONMENT ENUM...")
-    
     try:
-        from services.file_storage.config.environment import Environment
-        
+        from voice_recorder.services.file_storage.config.environment import Environment
+
         # Test enum values
         expected_envs = ["development", "testing", "production"]
         actual_envs = Environment.get_all_values()
@@ -151,10 +149,9 @@ def validate_environment_enum():
 def validate_environment_config():
     """Validate EnvironmentConfig dataclass functionality"""
     print("\n🔍 VALIDATING ENVIRONMENT CONFIG...")
-    
     try:
-        from services.file_storage.config.environment import EnvironmentConfig
-        
+        from voice_recorder.services.file_storage.config.environment import EnvironmentConfig
+
         # Test valid config creation
         config = EnvironmentConfig(
             base_subdir="test_recordings",
@@ -163,7 +160,7 @@ def validate_environment_config():
             max_file_size_mb=1000,
             enable_backup=True,
             enable_compression=False,
-            retention_days=30
+            retention_days=30,
         )
         print("  ✅ Valid EnvironmentConfig creation successful")
         
@@ -213,7 +210,7 @@ def validate_environment_manager():
     print("\n🔍 VALIDATING ENVIRONMENT MANAGER...")
     
     try:
-        from services.file_storage.config.environment import EnvironmentManager, EnvironmentConfig
+        from voice_recorder.services.file_storage.config.environment import EnvironmentManager, EnvironmentConfig
         
         # Test supported environments
         supported = EnvironmentManager.get_supported_environments()
@@ -270,7 +267,7 @@ def validate_backward_compatibility():
     
     try:
         # Test original StorageConfig import and usage
-        from services.file_storage.config import StorageConfig
+        from voice_recorder.services.file_storage.config import StorageConfig
         
         # Test that all original methods still work
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -315,7 +312,7 @@ def validate_backward_compatibility():
             
         # Test enhanced_file_storage import (backward compatibility facade)
         try:
-            from services.enhanced_file_storage import StorageConfig as BackwardConfig
+            from voice_recorder.services.enhanced_file_storage import StorageConfig as BackwardConfig
             backward_config = BackwardConfig.from_environment('development')
             if backward_config.environment != 'development':
                 print("  ❌ Backward compatibility facade not working")
@@ -340,14 +337,14 @@ def validate_phase_2_imports():
     
     try:
         # Test path management module imports
-        from services.file_storage.config.path_management import (
+        from voice_recorder.services.file_storage.config.path_management import (
             StoragePathType, StoragePathConfig, StoragePathManager, 
             PathValidator, PathPermissions
         )
         print("  ✅ Path management module imports successful")
         
         # Test updated config module imports
-        from services.file_storage.config import (
+        from voice_recorder.services.file_storage.config import (
             StorageConfig, StoragePathType as SPT, StoragePathManager as SPM
         )
         print("  ✅ Updated config module imports successful")
@@ -367,7 +364,7 @@ def validate_path_management_components():
     print("\n🔍 VALIDATING PATH MANAGEMENT COMPONENTS...")
     
     try:
-        from services.file_storage.config.path_management import (
+        from voice_recorder.services.file_storage.config.path_management import (
             StoragePathType, StoragePathConfig, StoragePathManager
         )
         
@@ -409,7 +406,7 @@ def validate_enhanced_storage_config():
     print("\n🔍 VALIDATING ENHANCED STORAGE CONFIG...")
     
     try:
-        from services.file_storage.config import StorageConfig
+        from voice_recorder.services.file_storage.config import StorageConfig
         
         with tempfile.TemporaryDirectory() as temp_dir:
             config = StorageConfig.from_environment('testing', base_path=temp_dir)
@@ -457,9 +454,9 @@ def validate_phase_2_integration():
     print("\n🔍 VALIDATING PHASE 1 + PHASE 2 INTEGRATION...")
     
     try:
-        from services.file_storage.config.environment import EnvironmentManager
-        from services.file_storage.config.path_management import StoragePathManager, StoragePathConfig
-        from services.file_storage.config import StorageConfig
+        from voice_recorder.services.file_storage.config.environment import EnvironmentManager
+        from voice_recorder.services.file_storage.config.path_management import StoragePathManager, StoragePathConfig
+        from voice_recorder.services.file_storage.config import StorageConfig
         
         # Test that StorageConfig can use path management features
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -566,7 +563,7 @@ def validate_configuration_consistency():
     print("\n🔍 VALIDATING CONFIGURATION CONSISTENCY...")
     
     try:
-        from services.file_storage.config.environment import EnvironmentManager
+        from voice_recorder.services.file_storage.config.environment import EnvironmentManager
         
         # Get all configurations
         all_configs = EnvironmentManager.get_all_configurations()

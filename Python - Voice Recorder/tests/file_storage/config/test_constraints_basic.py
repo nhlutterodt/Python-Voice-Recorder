@@ -7,13 +7,13 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from services.file_storage.config.constraints import (
+from voice_recorder.services.file_storage.config.constraints import (
     ConstraintConfig,
     StorageConstraints,
     ConstraintValidator,
-    create_constraints_from_environment
+    create_constraints_from_environment,
 )
-from services.file_storage.config.environment import EnvironmentConfig
+from voice_recorder.services.file_storage.config.environment import EnvironmentConfig
 
 
 def test_constraint_config_creation():
@@ -164,7 +164,7 @@ def test_constraint_validator():
     print("✅ ConstraintValidator test passed")
 
 
-@patch('services.file_storage.config.environment.EnvironmentManager')
+@patch('voice_recorder.services.file_storage.config.environment.EnvironmentManager')
 def test_create_constraints_from_environment(mock_env_manager_class):
     """Test creating constraints from environment manager"""
     # Mock environment manager

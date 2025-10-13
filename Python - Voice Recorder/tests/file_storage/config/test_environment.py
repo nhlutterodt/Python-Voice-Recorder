@@ -4,12 +4,12 @@ Tests environment management functionality in isolation
 """
 
 import pytest
-from services.file_storage.config.environment import (
-    Environment, 
-    EnvironmentConfig, 
-    EnvironmentManager
+from voice_recorder.services.file_storage.config.environment import (
+    Environment,
+    EnvironmentConfig,
+    EnvironmentManager,
 )
-from services.file_storage.exceptions import StorageConfigValidationError
+from voice_recorder.services.file_storage.exceptions import StorageConfigValidationError
 
 
 class TestEnvironment:

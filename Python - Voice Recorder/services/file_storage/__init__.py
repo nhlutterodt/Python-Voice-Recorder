@@ -4,7 +4,7 @@ Modular file storage system with comprehensive metadata management and database 
 """
 
 # Import exceptions for backward compatibility
-from .exceptions import (
+from voice_recorder.services.file_storage.exceptions import (
     StorageValidationError,
     FileMetadataError,
     DatabaseSessionError,
@@ -14,17 +14,17 @@ from .exceptions import (
 )
 
 # Import metadata calculator
-from .metadata import FileMetadataCalculator
+from voice_recorder.services.file_storage.metadata import FileMetadataCalculator
 
 # Import storage configuration with error handling
 try:
-    from .config import StorageConfig
+    from voice_recorder.services.file_storage.config import StorageConfig
 except ImportError:
     StorageConfig = None
 
 # Import core service (conditional import to avoid circular dependencies)
 try:
-    from .core import EnhancedFileStorageService
+    from voice_recorder.services.file_storage.core import EnhancedFileStorageService
 except ImportError:
     # If core import fails, we'll handle it in Phase 6
     EnhancedFileStorageService = None

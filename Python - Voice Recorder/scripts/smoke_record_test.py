@@ -13,17 +13,36 @@ The development/test environment should set PYTHONPATH to include the repo
 root (or the app folder and src) so `voice_recorder` resolves via the
 package shim.
 """
-from voice_recorder.audio_recorder import AudioRecorderManager
-from voice_recorder.models.database import SessionLocal
-from voice_recorder.models.recording import Recording
-from voice_recorder.services.recording_service import RecordingService
+# Heavy application imports (models, services, recorder) are imported inside
+# main() to avoid import-time side-effects (SQLAlchemy table metadata creation)
+AudioRecorderManager = None
+SessionLocal = None
+Recording = None
+RecordingService = None
 import wave
-from voice_recorder.models import database as _dbmod
+# _dbmod is imported lazily inside main() where needed to avoid creating
+# SQLAlchemy metadata at module import time (which can cause duplicate
+# Table definitions during migration/import checks).
+_dbmod = None
 import sqlite3
 
 
 def main():
     print("Starting smoke test: short recording (3s)")
+
+    # Import application modules here to avoid SQLAlchemy metadata being
+    # created at module import time which can trigger "Table already defined"
+    # errors when the same model module is loaded twice under different
+    # import paths during migration checks.
+    global AudioRecorderManager, SessionLocal, Recording, RecordingService
+    from voice_recorder.audio_recorder import AudioRecorderManager as _ARM
+    from voice_recorder.models.database import SessionLocal as _SessionLocal
+    from voice_recorder.models.recording import Recording as _Recording
+    from voice_recorder.services.recording_service import RecordingService as _RecordingService
+    AudioRecorderManager = _ARM
+    SessionLocal = _SessionLocal
+    Recording = _Recording
+    RecordingService = _RecordingService
 
     # Ensure recordings dir exists
     raw_dir = Path("recordings/raw")
@@ -57,15 +76,18 @@ def main():
     # Try to persist metadata using the RecordingService (preferred)
     try:
         # Use the application's db_context to ensure the same DB file/engine is targeted
-        from models.database import db_context as app_db_context
+        from voice_recorder.models.database import db_context as app_db_context
         svc = RecordingService(db_ctx=app_db_context)
         rec = svc.create_from_file(str(out_file))
         print("✅ DB metadata row created via RecordingService:", getattr(rec, 'id', None))
         # Debug DB path
         try:
-            print("DEBUG: DATABASE_URL=", _dbmod.DATABASE_URL)
-            if _dbmod.DATABASE_URL.startswith('sqlite:///'):
-                db_path = _dbmod.DATABASE_URL.replace('sqlite:///', '')
+            # Import the database module lazily for debugging so the module's
+            # SQLAlchemy metadata is not created at import time for this script.
+            from voice_recorder.models import database as _dbmod_local
+            print("DEBUG: DATABASE_URL=", _dbmod_local.DATABASE_URL)
+            if _dbmod_local.DATABASE_URL.startswith('sqlite:///'):
+                db_path = _dbmod_local.DATABASE_URL.replace('sqlite:///', '')
                 print("DEBUG: DB file exists:", sqlite3.os.path.exists(db_path))
                 try:
                     conn = sqlite3.connect(db_path)

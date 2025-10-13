@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Any, Optional, List
 
-from ..exceptions import StorageConfigValidationError
+from voice_recorder.services.file_storage.exceptions import StorageConfigValidationError
 
 
 class Environment(Enum):

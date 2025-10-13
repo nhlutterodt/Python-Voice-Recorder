@@ -6,20 +6,17 @@ Uses Alembic migrations for proper schema management.
 import sys
 from pathlib import Path
 
-# Add project root to Python path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
-
-# Setup logging
-from core.logging_config import setup_application_logging, get_logger
+# Use canonical imports from the package root. When running locally ensure PYTHONPATH
+# includes the project root and app dir so voice_recorder.* imports resolve.
+from voice_recorder.core.logging_config import setup_application_logging, get_logger
 setup_application_logging("INFO")
 logger = get_logger("database.init")
 
 def init_database():
     """Initialize database using Alembic migrations."""
     try:
-        # Import and run the migration script
-        from migrate_db import run_migrations
+        # Import and run the migration script (canonical import)
+        from voice_recorder.scripts.database.migrate_db import run_migrations
         logger.info("Initializing database with migrations...")
         run_migrations()
         logger.info("Database initialized successfully!")
@@ -36,11 +33,13 @@ def init_database():
     except ImportError:
         logger.warning("Migration system not available, falling back to direct table creation...")
         # Fallback to old method if Alembic is not available
-        from models.database import Base, engine
-        
+        from voice_recorder.models import database as app_db
+        Base = getattr(app_db, 'Base', None)
+        engine = getattr(app_db, 'engine', None)
+
         # Import model modules so SQLAlchemy's declarative base knows about them
         try:
-            import models.recording  # noqa: F401
+            import voice_recorder.models.recording  # noqa: F401
         except ModuleNotFoundError as e:
             logger.error("Critical error: Recording model module not found: %s", e)
             return False

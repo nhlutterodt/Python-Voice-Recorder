@@ -14,8 +14,8 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Test imports
-from services.file_storage.config import StorageConfig, EnvironmentManager
-from services.file_storage.metadata import FileMetadataCalculator
+from voice_recorder.services.file_storage.config import StorageConfig, EnvironmentManager
+from voice_recorder.services.file_storage.metadata import FileMetadataCalculator
 
 
 class TestPhase3AudioRecorderIntegration(unittest.TestCase):

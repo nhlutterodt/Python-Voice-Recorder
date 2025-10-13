@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from typing import Dict, Any, List
 from dataclasses import dataclass
 
-from core.logging_config import get_logger
+from voice_recorder.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 

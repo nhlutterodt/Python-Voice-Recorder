@@ -3,20 +3,37 @@ import uuid
 import hashlib
 import mimetypes
 from pathlib import Path
-from typing import Optional
-import models.database as mdb
-from models.database import db_context
+from typing import Optional, TYPE_CHECKING
+
 from repositories.recording_repository import RecordingRepository
-from models.recording import Recording
 from datetime import datetime, timezone
 
-from core.logging_config import get_logger
-from core.database_context import DBContextProtocol
+from voice_recorder.core.logging_config import get_logger
+from voice_recorder.core.database_context import DBContextProtocol
+
+if TYPE_CHECKING:
+    # Type hints only; avoid importing models at module import time
+    from voice_recorder.models.recording import Recording  # type: ignore
 
 logger = get_logger(__name__)
 
+# Ensure recordings directory exists on disk but avoid importing DB/models at module import time
 RECORDINGS_DIR = Path("recordings/raw").resolve()
 RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Ensure the Recording model is registered on Base.metadata at module import time
+# if it hasn't been already. Tests expect importing service modules to register
+# models so that Base.metadata.create_all() will create the tables. We prefer
+# not to import models at runtime in general, but importing here keeps tests
+# compatible while avoiding earlier duplicate-table problems by checking first.
+try:
+    import models.database as _mdb  # type: ignore
+    if 'recordings' not in getattr(_mdb.Base, 'metadata').tables:
+        # Import the model to register its Table on Base.metadata
+        import models.recording as _reg  # noqa: F401  # type: ignore
+except Exception:
+    # If any import fails (different import layout during migration), skip.
+    pass
 
 
 class RecordingService:
@@ -29,8 +46,16 @@ class RecordingService:
 
     def __init__(self, db_ctx: Optional[DBContextProtocol] = None, recordings_dir: Optional[Path] = None) -> None:
         # db_ctx is an instance exposing get_session(...) (DatabaseContextManager or test double)
-        # Fall back to the module-level db_context imported from models.database
-        self.db_context: DBContextProtocol = db_ctx or db_context
+        # Fall back to the module-level db_context imported from voice_recorder.models.database
+        if db_ctx is None:
+            # lazy import to avoid SQLAlchemy metadata registration at module import time
+            try:
+                from voice_recorder.models.database import db_context as _db_context  # type: ignore
+            except Exception:
+                _db_context = None
+            self.db_context: DBContextProtocol = _db_context
+        else:
+            self.db_context = db_ctx
 
         # Allow overriding the recordings directory for tests
         if recordings_dir:
@@ -49,7 +74,7 @@ class RecordingService:
                 h.update(chunk)
         return h.hexdigest()
 
-    def create_from_file(self, src_path: str, title: Optional[str] = None) -> Recording:
+    def create_from_file(self, src_path: str, title: Optional[str] = None) -> "Recording":
         src = Path(src_path)
         if not src.exists():
             raise FileNotFoundError(f"Source file not found: {src}")
@@ -76,13 +101,14 @@ class RecordingService:
             logger.error(f"Unexpected error processing file {src_path}: {e}")
             raise
 
-        # Debug: report which DATABASE_URL / engine we're targeting
+        # Debug: report which DATABASE_URL / engine we're targeting (lazy import)
         try:
-            resolved = getattr(mdb, 'DATABASE_URL', None)
+            import voice_recorder.models.database as _mdb
+            resolved = getattr(_mdb, 'DATABASE_URL', None)
             logger.info("RecordingService resolved DATABASE_URL: %s", resolved)
             logger.debug("RecordingService resolved DATABASE_URL: %s", resolved)
         except Exception:
-            logger.exception("Failed to read DATABASE_URL from models.database")
+            logger.exception("Failed to read DATABASE_URL from voice_recorder.models.database")
 
         # create DB row using context manager (use injected db_context)
         with self.db_context.get_session(autocommit=True) as session:
@@ -96,9 +122,12 @@ class RecordingService:
                 logger.exception("Failed to determine session bind/engine URL")
 
             repo = RecordingRepository(session)
-            rec = Recording(
+            # Lazily import Recording model to avoid mapping registration at import time
+            from voice_recorder.models.recording import Recording as _Recording
+
+            rec = _Recording(
                 filename=src.name,
-                stored_filename=stored_name if hasattr(Recording, "stored_filename") else None,
+                stored_filename=stored_name if hasattr(_Recording, "stored_filename") else None,
                 title=title,
                 duration=0.0,
                 status="active",

@@ -16,8 +16,8 @@ def validate_complete_integration():
     
     try:
         # Test 1: All major components can be imported
-    from voice_recorder.services.file_storage.config import StorageConfig, EnvironmentManager
-    from voice_recorder.services.file_storage.metadata import FileMetadataCalculator
+        from voice_recorder.services.file_storage.config import StorageConfig, EnvironmentManager
+        from voice_recorder.services.file_storage.metadata import FileMetadataCalculator
         print("✅ All major components import successfully")
         
         # Test 2: Components can work together in a real scenario

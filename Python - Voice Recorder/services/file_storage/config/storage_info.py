@@ -272,7 +272,7 @@ def check_space_for_file(path: str, file_size_mb: float) -> bool:
 # Backwards compatibility: some tests and code expect older API names and a StorageMetrics class
 try:
     # Import the legacy module if present and expose expected names
-    from .storage_info_old import StorageInfoCollector as _LegacyCollector, StorageMetrics as _LegacyMetrics  # type: ignore
+    from voice_recorder.services.file_storage.config.storage_info_old import StorageInfoCollector as _LegacyCollector, StorageMetrics as _LegacyMetrics  # type: ignore
 
     # If legacy implementations exist, prefer them for feature-complete behavior
     StorageInfoCollector = _LegacyCollector  # type: ignore

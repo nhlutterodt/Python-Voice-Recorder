@@ -7,13 +7,13 @@ import tempfile
 import pytest
 from unittest.mock import patch, MagicMock
 
-from services.file_storage.config.constraints import (
+from voice_recorder.services.file_storage.config.constraints import (
     ConstraintConfig,
     StorageConstraints,
     ConstraintValidator,
-    create_constraints_from_environment
+    create_constraints_from_environment,
 )
-from services.file_storage.config.environment import EnvironmentConfig
+from voice_recorder.services.file_storage.config.environment import EnvironmentConfig
 
 
 class TestConstraintConfig:
@@ -155,7 +155,7 @@ class TestStorageConstraints:
         assert result['valid'] is True
         assert result['skip_reason'] == 'disk_space_check_disabled'
     
-    @patch('services.file_storage.config.storage_info.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.storage_info.StorageInfoCollector')
     def test_validate_disk_space_for_file_sufficient_space(self, mock_collector_class):
         """Test disk space validation with sufficient space"""
         # Mock storage info collector
@@ -176,7 +176,7 @@ class TestStorageConstraints:
         assert result['available_space_mb'] == 5000
         assert result['required_space_mb'] == 50
     
-    @patch('services.file_storage.config.storage_info.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.storage_info.StorageInfoCollector')
     def test_validate_disk_space_for_file_insufficient_space(self, mock_collector_class):
         """Test disk space validation with insufficient space"""
         # Mock storage info collector
@@ -212,7 +212,7 @@ class TestConstraintValidator:
         )
         self.validator = ConstraintValidator(self.config)
     
-    @patch('services.file_storage.config.storage_info.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.storage_info.StorageInfoCollector')
     def test_validate_before_operation_valid(self, mock_collector_class):
         """Test pre-operation validation with valid conditions"""
         # Mock storage info collector
@@ -254,7 +254,7 @@ class TestConstraintValidator:
 class TestCreateConstraintsFromEnvironment:
     """Test constraints creation from environment"""
     
-    @patch('services.file_storage.config.environment.EnvironmentManager')
+    @patch('voice_recorder.services.file_storage.config.environment.EnvironmentManager')
     def test_create_constraints_from_environment(self, mock_env_manager_class):
         """Test creating constraints from environment manager"""
         # Mock environment manager
@@ -278,8 +278,8 @@ class TestCreateConstraintsFromEnvironment:
 class TestIntegrationConstraints:
     """Integration tests for constraint validation workflow"""
     
-    @patch('services.file_storage.config.environment.EnvironmentManager')
-    @patch('services.file_storage.config.storage_info.StorageInfoCollector')
+    @patch('voice_recorder.services.file_storage.config.environment.EnvironmentManager')
+    @patch('voice_recorder.services.file_storage.config.storage_info.StorageInfoCollector')
     def test_full_constraint_workflow(self, mock_collector_class, mock_env_manager_class):
         """Test complete constraint validation workflow"""
         # Mock environment manager

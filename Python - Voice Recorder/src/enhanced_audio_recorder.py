@@ -12,21 +12,21 @@ import time
 from datetime import datetime
 import uuid
 try:
-    from .performance_monitor import performance_monitor
+    from voice_recorder.performance_monitor import performance_monitor
 except Exception:
-    from performance_monitor import performance_monitor
-from core.logging_config import get_logger
+    from voice_recorder.performance_monitor import performance_monitor
+from voice_recorder.core.logging_config import get_logger
 
 # PHASE 3 INTEGRATION: Enhanced Storage System
-from services.file_storage.config import StorageConfig, EnvironmentManager
-from services.file_storage.metadata import FileMetadataCalculator
-from services.file_storage.exceptions import StorageConfigValidationError, FileMetadataError
+from voice_recorder.services.file_storage.config import StorageConfig, EnvironmentManager
+from voice_recorder.services.file_storage.metadata import FileMetadataCalculator
+from voice_recorder.services.file_storage.exceptions import StorageConfigValidationError, FileMetadataError
 
 # Setup logging for this module
 logger = get_logger(__name__)
 
 # Service for persisting recordings to DB when running headless (scripts/tests)
-from services.recording_service import RecordingService
+from voice_recorder.services.recording_service import RecordingService
 
 
 class AudioRecorderThread(QThread):
@@ -499,7 +499,7 @@ class EnhancedAudioRecorderManager(QObject):
         if not has_qt_app:
             try:
                 # Inject the application DB context so the service uses the same DB as the app
-                from models.database import db_context as app_db_context
+                from voice_recorder.models.database import db_context as app_db_context
                 svc = RecordingService(db_ctx=app_db_context)
                 rec = svc.create_from_file(file_path)
                 logger.info("Auto-created recording in DB (headless): %s", getattr(rec, 'id', None))

@@ -23,8 +23,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Dict, Optional, TYPE_CHECKING
 from urllib.parse import urlparse, parse_qs
-from .exceptions import NotAuthenticatedError, APILibrariesMissingError
-from .singleflight import AsyncSingleflight
+from voice_recorder.cloud.exceptions import NotAuthenticatedError, APILibrariesMissingError
+from voice_recorder.cloud.singleflight import AsyncSingleflight
 import sys
 
 # ---- Optional type-only imports to keep runtime clean ------------------------------------------
@@ -339,7 +339,7 @@ class GoogleAuthManager:
         # to be present immediately after construction.
         if self.config_manager is None:
             try:
-                from ..config_manager import config_manager as _cfg_mgr  # type: ignore
+                from voice_recorder.config_manager import config_manager as _cfg_mgr  # type: ignore
                 self.config_manager = _cfg_mgr
             except Exception:
                 # If import fails, leave self.config_manager as None and fall back to file

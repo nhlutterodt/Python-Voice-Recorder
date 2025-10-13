@@ -4,8 +4,8 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-from core.logging_config import get_logger
-from core.database_context import DatabaseContextManager, configure_database_engine, get_database_file_info
+from voice_recorder.core.logging_config import get_logger
+from voice_recorder.core.database_context import DatabaseContextManager, configure_database_engine, get_database_file_info
 
 logger = get_logger(__name__)
 
@@ -51,3 +51,55 @@ Base = declarative_base()
 
 # Create database context manager instance
 db_context = DatabaseContextManager(SessionLocal)
+
+# Import-time trace to help diagnose duplicate-table / MetaData issues during tests
+try:
+	# Print so pytest capture shows the import order and metadata state
+	print(f"[IMPORT TRACE] models.database loaded. Base.metadata id={id(Base.metadata)}; tables={list(Base.metadata.tables.keys())}")
+except Exception:
+	pass
+
+# Ensure this module is available under both legacy and canonical package names so
+# importing via either 'models.database' or 'voice_recorder.models.database' returns
+# the same module object and the same Base/MetaData instance. This prevents the
+# situation where the same file is imported twice under two module names and two
+# separate Base objects are created, which breaks SQLAlchemy table registration.
+try:
+	import sys
+	_self_mod = sys.modules.get(__name__)
+	if _self_mod is not None:
+		for _alias in ("models.database", "voice_recorder.models.database"):
+			existing = sys.modules.get(_alias)
+			if existing is not _self_mod:
+				sys.modules[_alias] = _self_mod
+		# Optional extra trace about aliasing
+		try:
+			print(f"[IMPORT TRACE] models.database aliases set: models.database -> {id(sys.modules.get('models.database'))}; voice_recorder.models.database -> {id(sys.modules.get('voice_recorder.models.database'))}")
+		except Exception:
+			pass
+
+		# Wrap metadata create_all/drop_all to trace calls (tests call these directly)
+		try:
+			_orig_create_all = Base.metadata.create_all
+			_orig_drop_all = Base.metadata.drop_all
+
+			def _trace_create_all(bind=None, *args, **kwargs):
+				try:
+					print(f"[IMPORT TRACE] Base.metadata.create_all called. metadata id={id(Base.metadata)}; bind={getattr(bind, 'url', str(bind))}")
+				except Exception:
+					pass
+				return _orig_create_all(bind=bind, *args, **kwargs)
+
+			def _trace_drop_all(bind=None, *args, **kwargs):
+				try:
+					print(f"[IMPORT TRACE] Base.metadata.drop_all called. metadata id={id(Base.metadata)}; bind={getattr(bind, 'url', str(bind))}")
+				except Exception:
+					pass
+				return _orig_drop_all(bind=bind, *args, **kwargs)
+
+			Base.metadata.create_all = _trace_create_all  # type: ignore
+			Base.metadata.drop_all = _trace_drop_all  # type: ignore
+		except Exception:
+			pass
+except Exception:
+	pass

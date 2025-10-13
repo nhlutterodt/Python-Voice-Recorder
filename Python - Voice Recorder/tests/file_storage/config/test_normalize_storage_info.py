@@ -1,5 +1,5 @@
 import unittest.mock as mock
-from services.file_storage.config import constraints
+from voice_recorder.services.file_storage.config import constraints
 
 
 def test_normalize_with_mb_keys():

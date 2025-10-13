@@ -3,28 +3,28 @@
 Environment-specific storage configuration management.
 """
 
-# Temporarily comment out imports to fix circular dependency during Phase 1
 try:
-    from .storage_config import StorageConfig
-except ImportError:
+    # Prefer canonical package imports so the same module object is used
+    from voice_recorder.services.file_storage.config.storage_config import StorageConfig
+except Exception:
     StorageConfig = None
 
 try:
-    from .environment import Environment, EnvironmentConfig, EnvironmentManager
-except ImportError:
+    from voice_recorder.services.file_storage.config.environment import Environment, EnvironmentConfig, EnvironmentManager
+except Exception:
     Environment = None
-    EnvironmentConfig = None 
+    EnvironmentConfig = None
     EnvironmentManager = None
 
 try:
-    from .path_management import (
-        StoragePathType, 
-        StoragePathConfig, 
-        StoragePathManager, 
-        PathValidator, 
-        PathPermissions
+    from voice_recorder.services.file_storage.config.path_management import (
+        StoragePathType,
+        StoragePathConfig,
+        StoragePathManager,
+        PathValidator,
+        PathPermissions,
     )
-except ImportError:
+except Exception:
     StoragePathType = None
     StoragePathConfig = None
     StoragePathManager = None

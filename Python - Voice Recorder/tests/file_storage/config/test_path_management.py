@@ -8,11 +8,14 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from services.file_storage.config.path_management import (
-    StoragePathType, StoragePathConfig, StoragePathManager, 
-    PathValidator, PathPermissions
+from voice_recorder.services.file_storage.config.path_management import (
+    StoragePathType,
+    StoragePathConfig,
+    StoragePathManager,
+    PathValidator,
+    PathPermissions,
 )
-from services.file_storage.exceptions import StorageConfigValidationError
+from voice_recorder.services.file_storage.exceptions import StorageConfigValidationError
 
 
 class TestStoragePathType:

@@ -15,9 +15,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QFont
 
-from .auth_manager import GoogleAuthManager
-from .drive_manager import GoogleDriveManager
-from .feature_gate import FeatureGate
+from voice_recorder.cloud.auth_manager import GoogleAuthManager
+from voice_recorder.cloud.drive_manager import GoogleDriveManager
+from voice_recorder.cloud.feature_gate import FeatureGate
 
 class CloudUploadThread(QThread):
     """Background thread for cloud uploads using the new Uploader interface.
@@ -88,7 +88,7 @@ class CloudUploadThread(QThread):
                 except Exception as e:
                     # Detect duplicate and emit a specific signal so the UI can prompt
                     try:
-                        from .exceptions import DuplicateFoundError
+                        from voice_recorder.cloud.exceptions import DuplicateFoundError
                         if isinstance(e, DuplicateFoundError):
                             self.duplicate_detected.emit(getattr(e, 'file_id', ''), getattr(e, 'name', ''))
                             return
@@ -412,12 +412,12 @@ class CloudUploadWidget(QWidget):
         layout.addWidget(self.upload_button)
 
         # Jobs button to view background upload jobs
-        from .job_dialog import JobDialog
+        from voice_recorder.cloud.job_dialog import JobDialog
         self.jobs_button = QPushButton("Jobs...")
         try:
             # Temporary debug info to verify DB paths at runtime
-            from models import database as _db
-            from . import job_queue_sql as _jq
+            from voice_recorder.models import database as _db
+            from voice_recorder.cloud import job_queue_sql as _jq
             print(f"[debug] models.DATABASE_URL={_db.DATABASE_URL}")
             print(f"[debug] job_queue_sql.DEFAULT_DB={repr(_jq.DEFAULT_DB)}")
         except Exception:
@@ -542,7 +542,7 @@ class CloudUploadWidget(QWidget):
 
         # Otherwise (No) -> Queue the job
         try:
-            from .job_queue_sql import enqueue_job, JobRow
+            from voice_recorder.cloud.job_queue_sql import enqueue_job, JobRow
             import uuid
 
             title = self.title_input.text().strip() or None
@@ -568,7 +568,7 @@ class CloudUploadWidget(QWidget):
             self.upload_button.setText('📥 Queued')
             QMessageBox.information(self, 'Queued', 'Upload queued. It will be processed in the background.')
             # Show jobs dialog so user can inspect or cancel
-            from .job_dialog import JobDialog
+            from voice_recorder.cloud.job_dialog import JobDialog
             JobDialog(self).exec()
             return
         except Exception as e:
@@ -618,7 +618,7 @@ class CloudUploadWidget(QWidget):
         elif reply == QMessageBox.StandardButton.No:
             # User chose to force upload: restart upload with force flag via job queue
             try:
-                from .job_queue_sql import enqueue_job, JobRow
+                from voice_recorder.cloud.job_queue_sql import enqueue_job, JobRow
                 import uuid
                 job = JobRow(id=str(uuid.uuid4()), file_path=self.current_file_path, title=self.title_input.text() or None, description=self.description_input.toPlainText() or None, tags=[t.strip() for t in (self.tags_input.text() or '').split(',') if t.strip()])
                 enqueue_job(job)
@@ -633,7 +633,7 @@ class CloudUploadWidget(QWidget):
     def on_show_jobs_clicked(self):
         """Show a simple job status dialog listing recent jobs."""
         try:
-            from .job_queue_sql import get_all_jobs
+            from voice_recorder.cloud.job_queue_sql import get_all_jobs
             jobs = get_all_jobs()
             lines = []
             for j in jobs[:50]:
@@ -830,7 +830,7 @@ class CloudUI(QWidget):
 if __name__ == "__main__":
     import sys
     from PySide6.QtWidgets import QApplication
-    from config_manager import config_manager
+    from voice_recorder.config_manager import config_manager
 
     app = QApplication(sys.argv)
 
