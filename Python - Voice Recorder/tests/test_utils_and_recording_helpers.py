@@ -50,7 +50,7 @@ def test_to_dict_handles_primitives_and_dates():
     o = Obj()
     # Fall back: to_dict expects SQLAlchemy inspect; when not available it should raise.
     # Here we assert behavior by directly using serializer on simple values via helper.
-    from models.utils import _serialize_value
+    from voice_recorder.models.utils import _serialize_value
 
     assert _serialize_value(o.n) == 1
     assert _serialize_value(o.s) == "x"

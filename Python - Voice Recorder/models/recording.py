@@ -16,20 +16,19 @@ elif 'voice_recorder.models.database' in sys.modules:
 
 if _base is None:
     try:
-        # Try to load the legacy module name first so tests that import
-        # 'models' end up sharing the same module object.
-        import models.database as _mdb  # type: ignore
+        # Use canonical import path
+        import voice_recorder.models.database as _mdb  # type: ignore
         _base = _mdb
     except Exception:
+        # Fallback for environments where voice_recorder package is not set up
         try:
             from voice_recorder.models.database import Base as _dummy_base  # type: ignore
             # If we could import the canonical Base directly, get the module
             import voice_recorder.models.database as _mdb  # type: ignore
             _base = _mdb
         except Exception:
-            # Last resort: try legacy import path again (may raise)
-            import models.database as _mdb  # type: ignore
-            _base = _mdb
+            # This should not happen in properly configured environment
+            raise ImportError("Could not import voice_recorder.models.database")
 
 if _base is not None and hasattr(_base, 'Base'):
     Base = _base.Base

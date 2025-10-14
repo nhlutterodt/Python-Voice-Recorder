@@ -135,7 +135,7 @@ def test_database_connection():
     print("\n💾 Testing Database Connection:")
 
     try:
-        from models.database import Base, SessionLocal, engine
+        from voice_recorder.models.database import Base, SessionLocal, engine
 
         # Create all tables
         Base.metadata.create_all(engine)
@@ -143,7 +143,7 @@ def test_database_connection():
         print("  ✅ Database tables created successfully")
 
         # Test basic operations
-        from models.recording import Recording
+        from voice_recorder.models.recording import Recording
 
         # Create test recording
         recording = Recording(

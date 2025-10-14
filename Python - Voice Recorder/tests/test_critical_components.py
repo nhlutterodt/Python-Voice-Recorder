@@ -399,7 +399,7 @@ class CriticalComponentsTester:
         """Test that backward compatibility is maintained"""
         try:
             # Test that original database functionality still works
-            from models.database import SessionLocal
+            from voice_recorder.models.database import SessionLocal
 
             # Test basic session creation (original way)
             session = SessionLocal()

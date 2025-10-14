@@ -27,10 +27,10 @@ RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
 # not to import models at runtime in general, but importing here keeps tests
 # compatible while avoiding earlier duplicate-table problems by checking first.
 try:
-    import models.database as _mdb  # type: ignore
+    import voice_recorder.models.database as _mdb  # type: ignore
     if 'recordings' not in getattr(_mdb.Base, 'metadata').tables:
         # Import the model to register its Table on Base.metadata
-        import models.recording as _reg  # noqa: F401  # type: ignore
+        import voice_recorder.models.recording as _reg  # noqa: F401  # type: ignore
 except Exception:
     # If any import fails (different import layout during migration), skip.
     pass

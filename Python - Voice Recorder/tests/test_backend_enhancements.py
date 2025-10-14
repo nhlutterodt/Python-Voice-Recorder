@@ -18,7 +18,7 @@ import tempfile
 from typing import Optional
 
 from core.database_health import DatabaseHealthMonitor
-from models.database import db_context
+from voice_recorder.models.database import db_context
 from services.enhanced_file_storage import (
     EnhancedFileStorageService,
     FileConstraintError,

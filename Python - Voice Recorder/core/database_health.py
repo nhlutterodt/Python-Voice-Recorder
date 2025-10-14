@@ -631,7 +631,7 @@ class DatabaseHealthMonitor:
                 
                 # Check if main tables exist (assuming Recording table)
                 try:
-                    from models.recording import Recording
+                    from voice_recorder.models.recording import Recording
                     session.query(Recording).first()
                     results["checks"].append({
                         "name": "table_accessibility",

@@ -21,7 +21,7 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 from voice_recorder.models.database import Base  # noqa: E402
-import models.recording as recording_model  # noqa: E402
+import voice_recorder.models.recording as recording_model  # noqa: E402
 
 # set target metadata for 'autogenerate' support
 target_metadata = Base.metadata
