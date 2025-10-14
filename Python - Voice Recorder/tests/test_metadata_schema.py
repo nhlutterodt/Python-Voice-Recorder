@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 
-import pytest
 
 from cloud.metadata_schema import (
     build_upload_metadata,

@@ -6,18 +6,111 @@ file management, and premium feature access.
 """
 
 import os
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton,
-    QLabel, QProgressBar, QMessageBox,
-    QTextEdit, QLineEdit, QFormLayout,
-    QFrame
-)
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QFont
+from typing import TYPE_CHECKING, Any
 
-from voice_recorder.cloud.auth_manager import GoogleAuthManager
-from voice_recorder.cloud.drive_manager import GoogleDriveManager
-from voice_recorder.cloud.feature_gate import FeatureGate
+# Guard heavy GUI imports so the module can be imported in test/CI
+# environments that don't have PySide6 available. When PySide6 is
+# missing we provide lightweight placeholders so classes can still be
+# imported but constructing UI elements will fail later with clearer
+# errors at runtime.
+_HAS_QT = True
+try:
+    from PySide6.QtWidgets import (
+        QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton,
+        QLabel, QProgressBar, QMessageBox,
+        QTextEdit, QLineEdit, QFormLayout,
+        QFrame
+    )
+    from PySide6.QtCore import Qt, QThread, QTimer, Signal
+    from PySide6.QtGui import QFont
+except Exception:  # pragma: no cover - environment dependent
+    _HAS_QT = False
+
+    # Minimal fallbacks so importing this module doesn't fail.
+    class QWidget:  # type: ignore
+        pass
+
+    class QVBoxLayout:  # type: ignore
+        pass
+
+    class QHBoxLayout:  # type: ignore
+        pass
+
+    class QGroupBox:  # type: ignore
+        pass
+
+    class QPushButton:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class QLabel:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class QProgressBar:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class QMessageBox:  # type: ignore
+        StandardButton = type("_SB", (), {})
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class QTextEdit:  # type: ignore
+        pass
+
+    class QLineEdit:  # type: ignore
+        pass
+
+    class QFormLayout:  # type: ignore
+        pass
+
+    class QFrame:  # type: ignore
+        pass
+
+    class QThread:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class QTimer:  # type: ignore
+        @staticmethod
+        def singleShot(ms, cb):
+            # Best-effort: call later synchronously in fallback
+            try:
+                cb()
+            except Exception:
+                pass
+
+    def Signal(*args, **kwargs):  # type: ignore
+        # Simple placeholder used as a descriptor-like object in tests
+        class _Sig:  # type: ignore
+            def __init__(self, *a, **k):
+                pass
+
+            def connect(self, *a, **k):
+                pass
+
+            def emit(self, *a, **k):
+                pass
+
+        return _Sig()
+
+    class QFont:  # type: ignore
+        pass
+
+    Qt = type("_Qt", (), {"AlignmentFlag": type("_AF", (), {"AlignCenter": 0})})
+
+# Avoid importing cloud managers at module import time; tests and static
+# import probes should be able to import this module without pulling in
+# network or Google libraries. Use TYPE_CHECKING to keep type hints.
+if TYPE_CHECKING:  # pragma: no cover - type checking only
+    from .auth_manager import GoogleAuthManager
+    from .drive_manager import GoogleDriveManager
+    from .feature_gate import FeatureGate
+else:
+    GoogleAuthManager = Any  # type: ignore
+    GoogleDriveManager = Any  # type: ignore
+    FeatureGate = Any  # type: ignore
 
 class CloudUploadThread(QThread):
     """Background thread for cloud uploads using the new Uploader interface.
@@ -88,7 +181,7 @@ class CloudUploadThread(QThread):
                 except Exception as e:
                     # Detect duplicate and emit a specific signal so the UI can prompt
                     try:
-                        from voice_recorder.cloud.exceptions import DuplicateFoundError
+                        from .exceptions import DuplicateFoundError
                         if isinstance(e, DuplicateFoundError):
                             self.duplicate_detected.emit(getattr(e, 'file_id', ''), getattr(e, 'name', ''))
                             return
@@ -412,17 +505,11 @@ class CloudUploadWidget(QWidget):
         layout.addWidget(self.upload_button)
 
         # Jobs button to view background upload jobs
-        from voice_recorder.cloud.job_dialog import JobDialog
         self.jobs_button = QPushButton("Jobs...")
-        try:
-            # Temporary debug info to verify DB paths at runtime
-            from voice_recorder.models import database as _db
-            from voice_recorder.cloud import job_queue_sql as _jq
-            print(f"[debug] models.DATABASE_URL={_db.DATABASE_URL}")
-            print(f"[debug] job_queue_sql.DEFAULT_DB={repr(_jq.DEFAULT_DB)}")
-        except Exception:
-            pass
-        self.jobs_button.clicked.connect(lambda: JobDialog(self).exec())
+        # Avoid importing models or job_queue_sql at module import time; these
+        # can be heavy or trigger DB file access. Defer until needed by the
+        # jobs dialog or queue operations. Import lazily when the user clicks.
+        self.jobs_button.clicked.connect(lambda: __import__(__package__ + '.job_dialog', fromlist=['JobDialog']).JobDialog(self).exec())
         layout.addWidget(self.jobs_button)
 
         # Choose target folder button
@@ -542,7 +629,7 @@ class CloudUploadWidget(QWidget):
 
         # Otherwise (No) -> Queue the job
         try:
-            from voice_recorder.cloud.job_queue_sql import enqueue_job, JobRow
+            from .job_queue_sql import enqueue_job, JobRow
             import uuid
 
             title = self.title_input.text().strip() or None
@@ -568,7 +655,7 @@ class CloudUploadWidget(QWidget):
             self.upload_button.setText('📥 Queued')
             QMessageBox.information(self, 'Queued', 'Upload queued. It will be processed in the background.')
             # Show jobs dialog so user can inspect or cancel
-            from voice_recorder.cloud.job_dialog import JobDialog
+            from .job_dialog import JobDialog
             JobDialog(self).exec()
             return
         except Exception as e:

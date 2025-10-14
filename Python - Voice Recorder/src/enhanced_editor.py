@@ -10,9 +10,8 @@ from voice_recorder.waveform_viewer import WaveformViewer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QCloseEvent
-from pydub import AudioSegment  # type: ignore
 import os
-from typing import Optional, Any  # Union not used
+from typing import Optional, Any, cast, Tuple
 from voice_recorder.config_manager import config_manager
 
 from voice_recorder.audio_processing import AudioLoaderThread, AudioTrimProcessor  # type: ignore
@@ -20,16 +19,14 @@ from voice_recorder.audio_recorder import AudioRecorderManager
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    # For type-checkers only; at runtime import models lazily to avoid
+    # For type-checkers only; import AudioSegment for annotations and
+    # keep runtime import-free so optional/native deps don't crash import.
+    from pydub import AudioSegment  # type: ignore
+    # At runtime, DB/models are imported lazily inside functions to avoid
     # SQLAlchemy mapped-class registration during module import.
-    from voice_recorder.models.database import SessionLocal  # type: ignore
-    from voice_recorder.models.recording import Recording  # type: ignore
 from voice_recorder.scripts.utilities.version import APP_NAME, UIConstants  # type: ignore
 from voice_recorder.core.logging_config import get_logger
 from voice_recorder.settings_ui import SettingsDialog
-from PySide6.QtGui import QDesktopServices
-from PySide6.QtCore import QUrl
-import webbrowser
 
 # Setup logging for this module
 logger = get_logger(__name__)
@@ -61,13 +58,28 @@ class EnhancedAudioEditor(QWidget):
         self.setWindowTitle(f"{APP_NAME} - Professional Audio Editing & Cloud Storage")
         self.setMinimumWidth(600)
         self.setMinimumHeight(600)
-
         # Audio-related attributes
         self.audio_file: Optional[str] = None
-        self.audio_segment: Optional[AudioSegment] = None
+        # Use a forward-reference for runtime safety (AudioSegment is
+        # only imported inside functions at runtime when needed)
+        self.audio_segment: Optional["AudioSegment"] = None
 
         # Waveform viewer
         self.waveform_viewer: Optional[WaveformViewer] = None
+        self.waveform_container: Optional[QWidget] = None
+        self.waveform_layout: Optional[QVBoxLayout] = None
+
+        # UI widget placeholders (declare here so type-checkers know these attributes exist)
+        self.load_button: Any = None
+        self.file_info_label: Any = None
+        self.progress_bar: Any = None
+        self.progress_label: Any = None
+        self.play_button: Any = None
+        self.pause_button: Any = None
+        self.stop_button: Any = None
+        self.trim_button: Any = None
+        self.start_input: Any = None
+        self.end_input: Any = None
 
         # Audio recorder
         self.audio_recorder = AudioRecorderManager()  # type: ignore
@@ -79,9 +91,9 @@ class EnhancedAudioEditor(QWidget):
         self.player.setAudioOutput(self.output)
 
         # Async processing components
-        self.loader_thread: Optional[Any] = None
-        self.trim_processor: Optional[Any] = None
-        self.progress_dialog: Optional[Any] = None
+        self.loader_thread: Any = None
+        self.trim_processor: Any = None
+        self.progress_dialog: Any = None
 
         # UI state
         self.is_loading: bool = False
@@ -92,10 +104,13 @@ class EnhancedAudioEditor(QWidget):
         self.drive_manager: Optional[Any] = None
         self.feature_gate: Optional[Any] = None
         self.cloud_ui: Optional[Any] = None
+        # UI placeholders that may be created later
+        self.fallback_widget: Optional[QWidget] = None
+        self.tab_widget: Optional[QTabWidget] = None
 
         if _cloud_available:
             # Determine effective keyring preference: explicit parameter overrides global config
-            effective_use_keyring = use_keyring if use_keyring is not None else config_manager.prefers_keyring()
+            effective_use_keyring = bool(use_keyring) if use_keyring is not None else bool(config_manager.prefers_keyring())
             self.init_cloud_components(feature_gate, use_keyring=effective_use_keyring)
 
         self.init_ui()
@@ -125,32 +140,46 @@ class EnhancedAudioEditor(QWidget):
             if getattr(self, 'cloud_ui', None) is None:
                 return
 
-            # If we have a tabbed UI, swap the fallback tab with the real CloudUI
-            if getattr(self, 'tab_widget', None) is not None:
-                tw: QTabWidget = self.tab_widget
-                # Find the fallback tab if present
-                for i in range(tw.count()):
-                    w = tw.widget(i)
-                    if getattr(w, '__class__', None) and w.__class__.__name__ == 'CloudFallbackWidget':
-                        tw.removeTab(i)
-                        tw.addTab(self.cloud_ui, "☁️ Cloud Features")
-                        return
-
-            # Otherwise, if single interface and we showed a fallback widget, replace it
-            if getattr(self, 'fallback_widget', None) is not None:
-                try:
-                    fb = self.fallback_widget
-                    # Attempt to find and replace in layout
-                    parent_layout = fb.parentWidget().layout()
-                    if parent_layout is not None:
-                        parent_layout.removeWidget(fb)
-                        fb.deleteLater()
-                        parent_layout.addWidget(self.cloud_ui)
-                        self.fallback_widget = None
-                except Exception:
-                    pass
+            # Try tabbed replacement first, then single-widget replacement
+            if self._replace_tabbed_fallback_with_cloud():
+                return
+            self._replace_single_fallback_with_cloud()
         except Exception:
             # Don't let UI replacement crash the app
+            pass
+
+    def _replace_tabbed_fallback_with_cloud(self) -> bool:
+        """Return True if a CloudFallback tab was found and replaced."""
+        if getattr(self, 'tab_widget', None) is None:
+            return False
+        tw: QTabWidget = self.tab_widget
+        for i in range(tw.count()):
+            w = tw.widget(i)
+            if getattr(w, '__class__', None) and w.__class__.__name__ == 'CloudFallbackWidget':
+                tw.removeTab(i)
+                tw.addTab(self.cloud_ui, "☁️ Cloud Features")
+                return True
+        return False
+
+    def _replace_single_fallback_with_cloud(self) -> None:
+        """Safely replace a single fallback widget with the initialized CloudUI."""
+        if getattr(self, 'fallback_widget', None) is None:
+            return
+        try:
+            fb = self.fallback_widget
+            if fb is None:
+                return
+            parent = fb.parentWidget()
+            if parent is None:
+                return
+            parent_layout = parent.layout()
+            if parent_layout is not None:
+                parent_layout.removeWidget(fb)
+                fb.deleteLater()
+                parent_layout.addWidget(self.cloud_ui)
+                self.fallback_widget = None
+        except Exception:
+            # Best-effort replacement; ignore any errors
             pass
 
     def init_ui(self) -> None:
@@ -555,18 +584,30 @@ class EnhancedAudioEditor(QWidget):
         # Start async loading
         self.is_loading = True
         self.update_ui_for_loading(True)
-        
+
         # Create and start loader thread
-        self.loader_thread = AudioLoaderThread(file_path)
-        self.loader_thread.audio_loaded.connect(self.on_audio_loaded)
-        self.loader_thread.error_occurred.connect(self.on_load_error)
-        self.loader_thread.progress_updated.connect(self.on_load_progress)
-        self.loader_thread.finished.connect(self.on_load_finished)
-        
+        # Type as Any to avoid mypy noise about Qt signal attributes on the thread
+        self.loader_thread = cast(Any, AudioLoaderThread(file_path))
+        # connect signals if thread present
+        if self.loader_thread is not None:
+            try:
+                self.loader_thread.audio_loaded.connect(self.on_audio_loaded)  # type: ignore[attr-defined]
+                self.loader_thread.error_occurred.connect(self.on_load_error)  # type: ignore[attr-defined]
+                self.loader_thread.progress_updated.connect(self.on_load_progress)  # type: ignore[attr-defined]
+                self.loader_thread.finished.connect(self.on_load_finished)  # type: ignore[attr-defined]
+            except Exception:
+                # best-effort connect; if signals missing, continue gracefully
+                pass
+
         # Show progress
         self.show_progress("Loading Audio File")
-        
-        self.loader_thread.start()
+
+        if self.loader_thread is not None:
+            try:
+                self.loader_thread.start()
+            except Exception:
+                # guard against unexpected missing start
+                pass
 
     def trim_audio_async(self):
         """Perform audio trimming asynchronously"""
@@ -616,62 +657,107 @@ class EnhancedAudioEditor(QWidget):
 
     def show_progress(self, operation_name: str):
         """Show progress bar and label"""
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
-        self.progress_label.setVisible(True)
-        self.progress_label.setText(f"{operation_name}...")
+        if self.progress_bar is not None:
+            try:
+                self.progress_bar.setVisible(True)
+                self.progress_bar.setValue(0)
+            except Exception:
+                pass
+        if self.progress_label is not None:
+            try:
+                self.progress_label.setVisible(True)
+                self.progress_label.setText(f"{operation_name}...")
+            except Exception:
+                pass
 
     def hide_progress(self):
         """Hide progress indicators"""
-        self.progress_bar.setVisible(False)
-        self.progress_label.setVisible(False)
+        if self.progress_bar is not None:
+            try:
+                self.progress_bar.setVisible(False)
+            except Exception:
+                pass
+        if self.progress_label is not None:
+            try:
+                self.progress_label.setVisible(False)
+            except Exception:
+                pass
 
     def update_ui_for_loading(self, loading: bool) -> None:
         """Update UI state during loading"""
-        self.load_button.setEnabled(not loading)
-        if loading:
-            self.load_button.setText(UIConstants.LOADING_AUDIO)
-            self.status_label.setText("Loading audio file...")
-        else:
-            self.load_button.setText(UIConstants.LOAD_AUDIO_FILE)
+        if self.load_button is not None:
+            try:
+                self.load_button.setEnabled(not loading)
+                if loading:
+                    self.load_button.setText(UIConstants.LOADING_AUDIO)
+                    if self.status_label is not None:
+                        self.status_label.setText("Loading audio file...")
+                else:
+                    self.load_button.setText(UIConstants.LOAD_AUDIO_FILE)
+            except Exception:
+                pass
 
     def update_ui_for_processing(self, processing: bool):
         """Update UI state during processing"""
-        self.trim_button.setEnabled(not processing)
+        if self.trim_button is not None:
+            try:
+                self.trim_button.setEnabled(not processing)
+            except Exception:
+                pass
         for button in [self.play_button, self.pause_button, self.stop_button]:
-            button.setEnabled(not processing and self.audio_segment is not None)  # type: ignore
+            if button is not None:
+                try:
+                    button.setEnabled(not processing and self.audio_segment is not None)  # type: ignore
+                except Exception:
+                    pass
 
     def validate_trim_inputs(self) -> bool:
         """Validate trim input fields"""
         if not self.audio_segment:  # type: ignore
-            self.trim_button.setEnabled(False)
+            self._disable_trim_button()
             return False
 
+        parsed = self._parse_trim_inputs()
+        if parsed is None:
+            self._disable_trim_button()
+            return False
+
+        start_ms, end_ms = parsed
+        duration_ms = len(self.audio_segment)  # type: ignore
+
+        # Validate range and set button state
+        valid = (0 <= start_ms < end_ms <= duration_ms)
+        if self.trim_button is not None:
+            try:
+                self.trim_button.setEnabled(valid and not self.is_processing)
+            except Exception:
+                pass
+        return valid
+
+    def _disable_trim_button(self) -> None:
+        if self.trim_button is not None:
+            try:
+                self.trim_button.setEnabled(False)
+            except Exception:
+                pass
+
+    def _parse_trim_inputs(self) -> Optional[Tuple[float, float]]:
+        """Parse trim inputs and return (start_ms, end_ms) or None on invalid input."""
+        if self.start_input is None or self.end_input is None:
+            return None
         try:
             start_text = self.start_input.text().strip()
             end_text = self.end_input.text().strip()
-
             if not start_text or not end_text:
-                self.trim_button.setEnabled(False)
-                return False
-
+                return None
             start_ms = float(start_text) * 1000
             end_ms = float(end_text) * 1000
-
-            duration_ms = len(self.audio_segment)  # type: ignore
-
-            # Validate range
-            valid = (0 <= start_ms < end_ms <= duration_ms)
-            self.trim_button.setEnabled(valid and not self.is_processing)
-
-            return valid
-
-        except ValueError:
-            self.trim_button.setEnabled(False)
-            return False
+            return (start_ms, end_ms)
+        except Exception:
+            return None
 
     # Event handlers for async operations
-    def on_audio_loaded(self, audio_segment: AudioSegment, file_path: str):
+    def on_audio_loaded(self, audio_segment: "AudioSegment", file_path: str):
         """Handle successful audio loading"""
         self.audio_file = file_path
         self.audio_segment = audio_segment
@@ -681,43 +767,86 @@ class EnhancedAudioEditor(QWidget):
         duration = len(audio_segment) / 1000  # Convert to seconds
         file_size = os.path.getsize(file_path) / (1024 * 1024)  # Convert to MB
 
-        self.file_info_label.setText(
-            f"📄 {filename} | ⏱️ {duration:.1f}s | 💾 {file_size:.1f}MB"
-        )
-        self.status_label.setText("Audio file loaded successfully!")
+        if self.file_info_label is not None:
+            try:
+                self.file_info_label.setText(
+                    f"📄 {filename} | ⏱️ {duration:.1f}s | 💾 {file_size:.1f}MB"
+                )
+            except Exception:
+                pass
+        if self.status_label is not None:
+            try:
+                self.status_label.setText("Audio file loaded successfully!")
+            except Exception:
+                pass
 
         # Enable playback controls
         for button in [self.play_button, self.pause_button, self.stop_button]:
-            button.setEnabled(True)
+            if button is not None:
+                try:
+                    button.setEnabled(True)
+                except Exception:
+                    pass
 
         # Setup media player
-        self.player.setSource(QUrl.fromLocalFile(file_path))
+        try:
+            self.player.setSource(QUrl.fromLocalFile(file_path))
+        except Exception:
+            pass
 
         # Validate trim inputs
-        self.validate_trim_inputs()
+        try:
+            self.validate_trim_inputs()
+        except Exception:
+            pass
 
         # Show waveform
-        self.show_waveform(file_path)
+        try:
+            self.show_waveform(file_path)
+        except Exception:
+            pass
 
     def show_waveform(self, file_path: str):
         """Display waveform of loaded audio file."""
         # Remove previous waveform if exists
-        if self.waveform_viewer:
-            self.waveform_layout.removeWidget(self.waveform_viewer)
-            self.waveform_viewer.deleteLater()
-            self.waveform_viewer = None
-        self.waveform_viewer = WaveformViewer(file_path)
-        self.waveform_layout.addWidget(self.waveform_viewer)
+        if self.waveform_viewer and self.waveform_layout is not None:
+            try:
+                self.waveform_layout.removeWidget(self.waveform_viewer)
+                self.waveform_viewer.deleteLater()
+                self.waveform_viewer = None
+            except Exception:
+                pass
+        try:
+            self.waveform_viewer = WaveformViewer(file_path)
+            if self.waveform_layout is not None:
+                self.waveform_layout.addWidget(self.waveform_viewer)
+        except Exception:
+            pass
 
     def on_load_error(self, error_message: str):
         """Handle audio loading errors"""
-        QMessageBox.critical(self, "Loading Error", f"Failed to load audio file:\n{error_message}")
-        self.status_label.setText("Failed to load audio file.")
+        try:
+            QMessageBox.critical(self, "Loading Error", f"Failed to load audio file:\n{error_message}")
+        except Exception:
+            pass
+        if self.status_label is not None:
+            try:
+                self.status_label.setText("Failed to load audio file.")
+            except Exception:
+                pass
 
     def on_load_progress(self, value: int, message: str):
         """Handle loading progress updates"""
-        self.progress_bar.setValue(value)
-        self.progress_label.setText(message)
+        if self.progress_bar is not None:
+            try:
+                self.progress_bar.setValue(value)
+            except Exception:
+                pass
+        if self.progress_label is not None:
+            try:
+                self.progress_label.setText(message)
+            except Exception:
+                pass
 
     def on_load_finished(self):
         """Handle completion of loading operation"""
@@ -981,6 +1110,16 @@ class EnhancedAudioEditor(QWidget):
         self.audio_file = file_path
         
         try:
+            # Lazy-import pydub.AudioSegment to avoid import-time crashes when
+            # optional native deps (audioop/pyaudioop) are missing in the
+            # test/runtime environment.
+            try:
+                from pydub import AudioSegment  # type: ignore
+            except Exception as _e:
+                # Surface a clear ImportError so callers/tests can skip or
+                # handle missing audio support.
+                raise ImportError("pydub.AudioSegment not available: %s" % _e)
+
             # Load audio segment
             self.audio_segment = AudioSegment.from_wav(file_path)  # type: ignore
             

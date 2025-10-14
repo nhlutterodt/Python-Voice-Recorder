@@ -1,52 +1,21 @@
-import os
-import importlib
-from types import SimpleNamespace
-
-import pytest
+import sys
+from pathlib import Path
 
 
-@pytest.fixture(scope='session')
-def qapp():
-    """Provide a headless Qt QApplication for widget tests.
+# Ensure the project package folder (the 'Python - Voice Recorder' folder) is on sys.path
+# so tests that import top-level modules like `services.*` can resolve them during collection.
+tests_dir = Path(__file__).resolve().parent
+project_root = tests_dir.parent
+if str(project_root) not in sys.path:
+    # Prepend project root (contains top-level packages like `services`) so tests import
+    # the in-repo modules rather than installed packages.
+    sys.path.insert(0, str(project_root))
+"""Minimal fixtures for tests.
 
-    Uses the offscreen platform so tests don't require a display.
-    """
-    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-    from PySide6.QtWidgets import QApplication
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    yield app
+This intentionally minimal file avoids heavy runtime imports to permit
+static analysis and linters to run across the test suite.
+"""
 
-
-@pytest.fixture
-def cloud_mocks(monkeypatch):
-    """Provide dummy cloud classes and patch them into the enhanced_editor module.
-
-    Returns a small dict with keys: 'ee' (the enhanced_editor module), 'DummyAuth',
-    and 'DummyCloudUI' so tests can inspect last created instances.
-    """
-    ee = importlib.import_module('enhanced_editor')
-    # Import reusable dummy helpers from tests.utils
-    from tests.utils import (
-        DummyAuthManager,
-        DummyDriveManager,
-        DummyFeatureGate,
-        DummyCloudUI,
-    )
-
-    monkeypatch.setattr(ee, '_cloud_available', True)
-    monkeypatch.setattr(ee, 'GoogleAuthManager', DummyAuthManager)
-    monkeypatch.setattr(ee, 'GoogleDriveManager', DummyDriveManager)
-    monkeypatch.setattr(ee, 'FeatureGate', DummyFeatureGate)
-    monkeypatch.setattr(ee, 'CloudUI', DummyCloudUI)
-
-    return {
-        'ee': ee,
-        'DummyAuth': DummyAuthManager,
-        'DummyCloudUI': DummyCloudUI,
-    }
-import tempfile
 from pathlib import Path
 from typing import Generator
 
@@ -54,103 +23,34 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from voice_recorder.core.database_context import DatabaseContextManager, DBContextProtocol
 from voice_recorder.models import database as app_db_mod
 
 
 @pytest.fixture()
 def tmp_sqlite_engine(tmp_path: Path):
-    """Create a temporary SQLite engine bound to a file in tmp_path."""
     db_file = tmp_path / "test_app.db"
     url = f"sqlite:///{db_file.as_posix()}"
-    engine = create_engine(url, future=True)
-    yield engine
+    eng = create_engine(url, future=True)
+    yield eng
     try:
-        engine.dispose()
+        eng.dispose()
     except Exception:
         pass
 
 
 @pytest.fixture()
-def tmp_db_context(tmp_sqlite_engine) -> Generator[DBContextProtocol, None, None]:
-    """Return a DatabaseContextManager using a sessionmaker bound to the tmp engine."""
+def tmp_db_context(tmp_sqlite_engine) -> Generator[object, None, None]:
     session_factory = sessionmaker(bind=tmp_sqlite_engine, autoflush=False)
-    db_ctx: DBContextProtocol = DatabaseContextManager(session_factory)
-    # Ensure models are imported so metadata includes all tables
-    # Importing models.recording registers the Recording model with Base
-    try:
-        __import__("models.recording")
-    except Exception:
-        # Best-effort import; tests will fail if models are broken
-        pass
-    # Create tables for the test engine
+    # Instantiate DatabaseContextManager lazily to avoid heavy imports at module import time.
+    from voice_recorder.core.database_context import DatabaseContextManager
+
+    db_ctx = DatabaseContextManager(session_factory)
     try:
         app_db_mod.Base.metadata.create_all(bind=tmp_sqlite_engine)
     except Exception:
         pass
-
     yield db_ctx
-
-    # Teardown: drop tables and dispose engine
     try:
         app_db_mod.Base.metadata.drop_all(bind=tmp_sqlite_engine)
     except Exception:
         pass
-    try:
-        tmp_sqlite_engine.dispose()
-    except Exception:
-        pass
-
-
-@pytest.fixture()
-def recordings_dir(tmp_path: Path) -> Path:
-    d = tmp_path / "recordings"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-import os
-import sys
-from pathlib import Path
-
-
-# Ensure project src path is on sys.path for tests
-ROOT = Path(__file__).resolve().parents[1]  # tests/.. -> project root (Python - Voice Recorder)
-SRC = ROOT / 'src'
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-import shutil
-import pytest
-from pathlib import Path
-from voice_recorder.models.database import Base, engine
-
-# Prevent pytest from trying to collect the standalone comprehensive auth test
-# (it provides its own TestRunner and is meant to be executed directly).
-collect_ignore = ["test_auth_manager_comprehensive.py"]
-
-
-@pytest.fixture(scope="function")
-def tmp_recordings_dir(tmp_path):
-    d = tmp_path / "recordings" / "raw"
-    d.mkdir(parents=True)
-    orig = Path("recordings/raw")
-    # move aside if exists
-    moved = False
-    if orig.exists():
-        backup = tmp_path / "orig_recordings"
-        shutil.move(str(orig), str(backup))
-        moved = True
-    # symlink not reliable on Windows; instead set env or monkeypatch RECORDINGS_DIR in service tests
-    yield d
-    # cleanup
-    if orig.exists():
-        shutil.rmtree(str(orig), ignore_errors=True)
-    if moved:
-        shutil.move(str(backup), str(orig))
-
-
-@pytest.fixture(scope="function")
-def temp_db_file(tmp_path):
-    db_file = tmp_path / "test.db"
-    # monkeypatch engine? For simplicity tests will rely on in-memory DB setup externally
-    Base.metadata.create_all(bind=engine)
-    yield db_file
-    Base.metadata.drop_all(bind=engine)

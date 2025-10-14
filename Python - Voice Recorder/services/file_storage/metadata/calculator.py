@@ -11,7 +11,6 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from contextlib import contextmanager
 
-from pydub import AudioSegment  # type: ignore
 from voice_recorder.services.file_storage.exceptions import FileMetadataError
 
 
@@ -204,6 +203,16 @@ class FileMetadataCalculator:
                 # Windows doesn't support SIGALRM, just proceed without timeout
                 yield
         
+        # Import pydub lazily so the module can be imported even when
+        # optional native dependencies (audioop/pyaudioop) are not present.
+        try:
+            from pydub import AudioSegment  # type: ignore
+        except Exception:
+            # If pydub isn't available, return fallback metadata instead
+            # of raising at import time. Downstream callers that require
+            # real audio metadata should handle the fallback values.
+            return cls._get_fallback_audio_metadata()
+
         try:
             with timeout_context(cls.AUDIO_METADATA_TIMEOUT):
                 audio = AudioSegment.from_file(file_path)

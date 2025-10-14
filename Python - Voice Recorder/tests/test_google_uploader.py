@@ -1,7 +1,5 @@
-import threading
 from unittest.mock import Mock
 
-import pytest
 
 from cloud.google_uploader import GoogleDriveUploader
 from cloud.uploader import UploadProgress

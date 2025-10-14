@@ -23,14 +23,17 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from numpy.typing import NDArray
 
+# Defer pydub imports to runtime to avoid import-time failures when native
+# audio libraries (audioop/pyaudioop) are missing. Tests that need full
+# waveform functionality should run with pydub installed.
+AudioSegment = None
+_HAS_PYDUB = False
 try:
     from pydub import AudioSegment  # type: ignore
-except Exception as exc:  # pragma: no cover
-    # Provide a helpful message for missing deps (often venv not activated)
-    raise ImportError(
-        "Failed to import pydub. Make sure your Python 3.12 virtual environment is active "
-        "and dependencies are installed: `python -m pip install -r requirements.txt`"
-    ) from exc
+    _HAS_PYDUB = True
+except Exception:
+    AudioSegment = None
+    _HAS_PYDUB = False
 
 # ---- Logging -----------------------------------------------------------------
 logger = logging.getLogger(__name__)
@@ -85,13 +88,20 @@ class WaveformViewer(QWidget):
         # Create and reuse a single Axes
         self._ax: Axes = self._figure.add_subplot(111)
 
-        try:
-            self._plot_waveform(Path(file_path))
-        except Exception as exc:
-            logger.exception("Failed to render waveform: %s", exc)
-            # Render a friendly error state on the canvas
+        if _HAS_PYDUB:
+            try:
+                self._plot_waveform(Path(file_path))
+            except Exception as exc:
+                logger.exception("Failed to render waveform: %s", exc)
+                # Render a friendly error state on the canvas
+                self._ax.clear()
+                self._ax.text(0.5, 0.5, f"Error loading audio:\n{exc}", ha="center", va="center")
+                self._ax.set_axis_off()
+                self._canvas.draw()
+        else:
+            logger.info("pydub not available; WaveformViewer will be a placeholder.")
             self._ax.clear()
-            self._ax.text(0.5, 0.5, f"Error loading audio:\n{exc}", ha="center", va="center")
+            self._ax.text(0.5, 0.5, "Waveform unavailable (pydub missing)", ha="center", va="center")
             self._ax.set_axis_off()
             self._canvas.draw()
 
@@ -129,6 +139,8 @@ class WaveformViewer(QWidget):
     def _load_audio(path: Path) -> "AudioSegment":
         # pydub uses ffmpeg under the hood; ensure ffmpeg is available in PATH
         logger.info("Loading audio: %s", path)
+        if not _HAS_PYDUB or AudioSegment is None:
+            raise ImportError("pydub not available; cannot load audio")
         return cast("AudioSegment", AudioSegment.from_file(path.as_posix()))
 
     @staticmethod

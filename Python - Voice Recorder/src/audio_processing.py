@@ -3,7 +3,9 @@
 
 from PySide6.QtCore import QThread, Signal, QObject
 from PySide6.QtWidgets import QProgressDialog, QApplication
-from pydub import AudioSegment  # type: ignore
+from typing import TYPE_CHECKING, cast
+if TYPE_CHECKING:
+    from pydub import AudioSegment  # type: ignore
 import wave
 import os
 from typing import cast
@@ -15,7 +17,7 @@ logger = get_logger(__name__)
 
 class AudioLoaderThread(QThread):
     """Asynchronous audio file loader to prevent UI blocking"""
-    audio_loaded = Signal(AudioSegment, str)
+    audio_loaded = Signal(object, str)  # AudioSegment at runtime; use object to avoid import-time
     error_occurred = Signal(str)
     progress_updated = Signal(int, str)
     
@@ -34,8 +36,15 @@ class AudioLoaderThread(QThread):
                 
             self.progress_updated.emit(30, "Reading audio data...")
             
+            # Lazy-import pydub to avoid import-time crashes when native deps
+            # (audioop/pyaudioop) are not available in the environment.
+            try:
+                from pydub import AudioSegment  # type: ignore
+            except Exception as _e:
+                raise ImportError(f"pydub.AudioSegment not available: {_e}")
+
             # Load audio segment with pydub
-            audio_segment = cast(AudioSegment, AudioSegment.from_wav(self.file_path))
+            audio_segment = cast('AudioSegment', AudioSegment.from_wav(self.file_path))
             
             self.progress_updated.emit(70, "Processing audio metadata...")
             
@@ -137,7 +146,7 @@ class AudioTrimProcessor(QThread):
     trim_completed = Signal(str)
     error_occurred = Signal(str)
     
-    def __init__(self, audio_segment: AudioSegment, start_ms: int, end_ms: int, output_path: str):
+    def __init__(self, audio_segment: 'AudioSegment', start_ms: int, end_ms: int, output_path: str):
         super().__init__()
         self.audio_segment = audio_segment
         self.start_ms = start_ms
@@ -155,7 +164,7 @@ class AudioTrimProcessor(QThread):
             self.progress_updated.emit(30, "Trimming audio segment...")
             
             # Perform the trim
-            trimmed = cast(AudioSegment, self.audio_segment[self.start_ms:self.end_ms])
+            trimmed = cast('AudioSegment', self.audio_segment[self.start_ms:self.end_ms])
             
             self.progress_updated.emit(60, "Applying fade effects...")
             

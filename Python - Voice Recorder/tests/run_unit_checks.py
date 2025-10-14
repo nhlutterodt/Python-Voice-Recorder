@@ -9,7 +9,7 @@ for p in (tests_dir, project_root):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-import test_utils_and_recording_helpers as test_module
+import test_utils_and_recording_helpers as test_module  # noqa: E402
 test_recording_utils_sha256_and_size_and_filename = test_module.test_recording_utils_sha256_and_size_and_filename
 test_to_dict_handles_primitives_and_dates = test_module.test_to_dict_handles_primitives_and_dates
 

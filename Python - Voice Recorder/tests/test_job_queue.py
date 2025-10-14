@@ -1,5 +1,3 @@
-import os
-from tempfile import NamedTemporaryFile
 
 from cloud.job_queue import JobQueue
 

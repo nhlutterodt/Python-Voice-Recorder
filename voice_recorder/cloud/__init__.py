@@ -6,7 +6,6 @@ This shim makes `voice_recorder.cloud.*` imports resolve to the existing
 from __future__ import annotations
 
 from pathlib import Path
-import os
 
 # Locate the repository root (two levels up from this file)
 _root = Path(__file__).parent.parent.parent

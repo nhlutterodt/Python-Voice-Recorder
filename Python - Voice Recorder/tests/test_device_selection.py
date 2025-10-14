@@ -1,7 +1,5 @@
-import pytest
-import sounddevice as sd
 from unittest.mock import patch
-from audio_recorder import AudioRecorderManager, AudioRecorderThread
+from audio_recorder import AudioRecorderManager
 
 
 def test_set_selected_device_invalid(monkeypatch):

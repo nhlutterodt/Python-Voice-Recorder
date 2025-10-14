@@ -7,6 +7,38 @@ name = "voice-recorder"
 version = "0.0.0"
 description = "Voice Recorder Pro - application package"
 requires-python = ">=3.10"
+readme = "Python - Voice Recorder/README.md"
+authors = [ { name = "Neils Haldane-Lutterodt" } ]
+license = { text = "MIT" }
+classifiers = [
+	"License :: OSI Approved :: MIT License",
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3 :: Only",
+	"Programming Language :: Python :: 3.10",
+	"Programming Language :: Python :: 3.12",
+	"Operating System :: OS Independent",
+]
+dependencies = []
 
 [tool.setuptools.packages.find]
 where = ["Python - Voice Recorder/src"]
+
+[tool.ruff]
+line-length = 88
+exclude = [".venv", "venv", "venv_test", "build", "dist", "__pycache__"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[project.optional-dependencies]
+test = [
+	"pytest>=7.0",
+	"SQLAlchemy>=2.0",
+	"psutil>=5.9",
+]
+

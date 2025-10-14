@@ -15,22 +15,22 @@ from typing import Optional, List
 
 
 DEFAULT_DB = None
-try:
-    # Prefer the project's configured SQLAlchemy DATABASE_URL so the job queue
-    # operates on the same sqlite file as the rest of the app when no
-    # explicit db_path is passed. Import locally to avoid import cycles at
-    # higher levels.
-    from voice_recorder.models import database as _app_db
 
-    if isinstance(_app_db.DATABASE_URL, str) and _app_db.DATABASE_URL.startswith('sqlite:///'):
-        # Convert SQLAlchemy sqlite URL to a filesystem path the sqlite3
-        # stdlib can open.
-        DEFAULT_DB = _app_db.DATABASE_URL.replace('sqlite:///', '', 1)
-    else:
-        DEFAULT_DB = _app_db.DATABASE_URL
-except Exception:
-    # If anything goes wrong, fall back to in-memory default.
-    DEFAULT_DB = None
+
+def _resolve_default_db() -> Optional[str]:
+    """Attempt to resolve the project's configured DB path lazily.
+
+    This avoids importing application modules at module import time which
+    can trigger DB access or other side effects in test environments.
+    """
+    try:
+        from voice_recorder.models import database as _app_db  # type: ignore
+
+        if isinstance(_app_db.DATABASE_URL, str) and _app_db.DATABASE_URL.startswith('sqlite:///'):
+            return _app_db.DATABASE_URL.replace('sqlite:///', '', 1)
+        return _app_db.DATABASE_URL
+    except Exception:
+        return None
 
 
 @dataclass
@@ -54,7 +54,13 @@ class JobRow:
 
 
 def _connect(db_path: Optional[str] = None):
-    path = db_path or (DEFAULT_DB or ':memory:')
+    # Resolve db path lazily so importing this module is cheap and safe.
+    path = db_path
+    if path is None:
+        path = DEFAULT_DB
+    if path is None:
+        path = _resolve_default_db() or ':memory:'
+
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn

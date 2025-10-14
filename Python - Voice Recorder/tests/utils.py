@@ -3,7 +3,6 @@
 This module holds small dummy implementations used across tests so they
 can be imported from a single place (keeps conftest.py small and DRY).
 """
-from types import SimpleNamespace
 
 from PySide6.QtWidgets import QWidget
 

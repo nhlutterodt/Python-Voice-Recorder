@@ -4,9 +4,9 @@ from typing import Optional, Callable, TypedDict, Any
 import threading
 import logging
 
-from voice_recorder.cloud.uploader import Uploader, UploadProgress, UploadResult
-from voice_recorder.cloud.upload_utils import chunked_upload_with_progress, TransientUploadError
-from voice_recorder.cloud.exceptions import NotAuthenticatedError, APILibrariesMissingError, UploadError, DuplicateFoundError
+from .uploader import Uploader, UploadProgress, UploadResult
+from .upload_utils import chunked_upload_with_progress, TransientUploadError
+from .exceptions import NotAuthenticatedError, APILibrariesMissingError, UploadError, DuplicateFoundError
 
 logger = logging.getLogger(__name__)
 

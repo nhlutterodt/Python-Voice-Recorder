@@ -1,6 +1,6 @@
 import pytest
 
-from cloud.upload_utils import _discover_total_bytes, _normalize_progress, _check_and_handle_cancel, _handle_progress
+from cloud.upload_utils import _check_and_handle_cancel, _handle_progress
 
 
 class DummyStatus:

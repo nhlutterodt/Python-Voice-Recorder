@@ -12,7 +12,6 @@ class FakeAuth:
         # Return a simple sentinel object; tests that call _get_service
         # will not actually use these credentials because we monkeypatch
         # network interactions, but providing this method avoids AttributeError.
-        from unittest.mock import Mock
         return Mock()
 
 

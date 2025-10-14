@@ -1,5 +1,3 @@
-from unittest.mock import Mock
-import threading
 
 from cloud.google_uploader import GoogleDriveUploader
 from cloud.metadata_schema import build_upload_metadata

@@ -5,7 +5,7 @@ import time
 import psutil
 from datetime import datetime
 from contextlib import contextmanager
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
 from voice_recorder.core.logging_config import get_logger
@@ -20,7 +20,7 @@ class PerformanceMetric:
     duration: float
     memory_delta: int
     timestamp: datetime
-    additional_data: Dict[str, Any] = None
+    additional_data: Optional[Dict[str, Any]] = None
 
 
 class PerformanceBenchmark:
@@ -29,11 +29,11 @@ class PerformanceBenchmark:
     def __init__(self):
         self.metrics: List[PerformanceMetric] = []
         self.current_operation: str = ""
-        self.start_time: float = 0
+        self.start_time: float = 0.0
         self.start_memory: int = 0
     
     @contextmanager
-    def measure_operation(self, operation_name: str, **additional_data):
+    def measure_operation(self, operation_name: str, **additional_data: Any):
         """Context manager to measure operation performance"""
         self.current_operation = operation_name
         self.start_time = time.time()
@@ -110,7 +110,7 @@ class PerformanceBenchmark:
         report.append("")
         
         # Group metrics by operation
-        operations = {}
+        operations: Dict[str, List[PerformanceMetric]] = {}
         for metric in self.metrics:
             if metric.operation_name not in operations:
                 operations[metric.operation_name] = []
@@ -180,7 +180,7 @@ class PerformanceBenchmark:
         
         return "\n".join(report)
     
-    def export_csv(self, filename: str = None) -> str:
+    def export_csv(self, filename: Optional[str] = None) -> str:
         """Export metrics to CSV file"""
         if filename is None:
             filename = f"performance_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -248,7 +248,7 @@ def get_performance_report() -> str:
     return performance_monitor.generate_report()
 
 
-def save_performance_report(filename: str = None) -> str:
+def save_performance_report(filename: Optional[str] = None) -> str:
     """Save performance report to file"""
     if filename is None:
         filename = f"performance_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"

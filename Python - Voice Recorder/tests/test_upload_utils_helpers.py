@@ -1,4 +1,3 @@
-import pytest
 
 from cloud import upload_utils
 

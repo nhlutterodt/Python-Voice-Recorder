@@ -1,4 +1,3 @@
-import tempfile
 from pathlib import Path
 
 from cloud import job_queue

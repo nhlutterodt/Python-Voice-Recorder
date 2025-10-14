@@ -1,9 +1,6 @@
-import os
 from unittest.mock import Mock
 
-import pytest
 
-from cloud.dedupe import compute_content_sha256
 
 
 def test_upload_recording_short_circuits_on_duplicate(monkeypatch, tmp_path):
@@ -60,7 +57,6 @@ def test_upload_recording_short_circuits_on_duplicate(monkeypatch, tmp_path):
     monkeypatch.setattr(GoogleDriveManager, '_ensure_recordings_folder', lambda self: 'fld-1')
 
     # Also stub the media class so create_request path works when manager uploads
-    from cloud.drive_manager import _import_http
     # Ensure _import_http can be called; reuse the real function or a stub if necessary
 
     res = mgr.upload_recording(str(p), force=True)

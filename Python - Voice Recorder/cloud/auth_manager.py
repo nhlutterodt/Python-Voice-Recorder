@@ -21,10 +21,10 @@ import webbrowser
 import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional, TYPE_CHECKING, IO
 from urllib.parse import urlparse, parse_qs
-from voice_recorder.cloud.exceptions import NotAuthenticatedError, APILibrariesMissingError
-from voice_recorder.cloud.singleflight import AsyncSingleflight
+from .exceptions import NotAuthenticatedError, APILibrariesMissingError
+from .singleflight import AsyncSingleflight
 import sys
 
 # ---- Optional type-only imports to keep runtime clean ------------------------------------------
@@ -154,7 +154,7 @@ class GoogleAuthManager:
         "openid",
     ]
 
-    def __init__(self, app_dir: Optional[Path | str] = None, *, config_manager: Optional[Any] = None, credentials: Optional[Any] = None, use_keyring: bool = True) -> None:
+    def __init__(self, app_dir: Optional[Path | str] = None, *, config_manager: Optional[Any] = None, credentials: Optional[Any] = None, use_keyring: bool = False) -> None:
         self.app_dir: Path = Path(app_dir) if app_dir else Path(__file__).parent.parent
         self.credentials_dir: Path = self.app_dir / "cloud" / "credentials"
         self.credentials_file: Path = self.credentials_dir / "token.json"
@@ -168,20 +168,20 @@ class GoogleAuthManager:
         self.use_keyring: bool = bool(use_keyring)
 
         self.credentials_dir.mkdir(parents=True, exist_ok=True)
-        # Credentials may be injected for DI/testing. Only attempt to auto-load
-        # from disk when no credentials were injected.
+        # Credentials may be injected for DI/testing. We intentionally do NOT
+        # auto-load credentials from disk during construction. Auto-loading can
+        # cause tests and CI runs to unintentionally pick up developer tokens
+        # or system keyring entries. Callers or tests may invoke
+        # _load_credentials_if_present() explicitly when desired.
         self.credentials: Optional[Any] = credentials
-        if self.credentials is None:
-            self._load_credentials_if_present()
         # Guard to ensure only one credential refresh happens at a time.
         self._refresh_lock = threading.Lock()
         # Event used to coordinate a single in-flight refresh operation.
         # When not None, it is a threading.Event that waiters can wait() on.
-        # Use simple type comments to avoid runtime issues with annotations.
-        self._refresh_inflight = None  # type: Optional[threading.Event]
+        self._refresh_inflight: Optional[threading.Event] = None
         # If the most recent in-flight refresh failed, the exception is stored here
         # so waiters can observe the failure.
-        self._refresh_exception = None  # type: Optional[BaseException]
+        self._refresh_exception: Optional[BaseException] = None
         # Async singleflight helper for asyncio consumers
         self._async_singleflight = AsyncSingleflight()
 
@@ -333,101 +333,121 @@ class GoogleAuthManager:
 
     # ---- Internals ----------------------------------------------------------------------------
     def _get_client_config(self) -> Optional[Dict[str, Any]]:
-        # Prefer environment/config_manager
-        # Try lazy import of config_manager only when actually needed. This keeps
-        # object initialization deterministic for tests that expect no config_manager
-        # to be present immediately after construction.
-        if self.config_manager is None:
-            try:
-                from voice_recorder.config_manager import config_manager as _cfg_mgr  # type: ignore
-                self.config_manager = _cfg_mgr
-            except Exception:
-                # If import fails, leave self.config_manager as None and fall back to file
-                self.config_manager = None
-                logger.info("config_manager not available; falling back to client_secrets.json if present")
+        # Attempt sources in order: config manager, environment override, client_secrets file
+        cfg = self._client_config_from_manager()
+        if cfg:
+            return cfg
 
-        if self.config_manager is not None:
-            try:
-                # Use getattr to avoid static-analysis complaints about unknown attributes
-                get_cfg = getattr(self.config_manager, "get_google_credentials_config", None)
-                if callable(get_cfg):
-                    cfg = get_cfg()
-                    # Ensure cfg is a dictionary before returning to satisfy type checks
-                    if isinstance(cfg, dict):
-                        return cfg
-            except Exception as e:  # pragma: no cover
-                logger.error("Error from config_manager: %s", e)
+        cfg = self._client_config_from_env()
+        if cfg:
+            return cfg
 
-        # Allow overriding the client secrets path via environment variable (useful for dev/test)
-        env_path = os.environ.get("VRP_CLIENT_SECRETS")
-        if env_path:
-            try:
-                envp = Path(env_path)
-                if envp.exists():
-                    logger.info("Loading Google client config from VRP_CLIENT_SECRETS: %s", envp)
-                    return json.loads(envp.read_text(encoding="utf-8"))
-                else:
-                    logger.warning("VRP_CLIENT_SECRETS is set but file not found: %s", envp)
-            except Exception as e:  # pragma: no cover
-                logger.error("Error reading VRP_CLIENT_SECRETS file %s: %s", env_path, e)
-
-        # Fallback to client_secrets.json next
-        if self.client_secrets_file.exists():
-            try:
-                logger.info("Loading Google client config from %s", self.client_secrets_file)
-                return json.loads(self.client_secrets_file.read_text(encoding="utf-8"))
-            except Exception as e:  # pragma: no cover
-                logger.error("Error reading client_secrets.json: %s", e)
+        cfg = self._client_config_from_file()
+        if cfg:
+            return cfg
 
         logger.error("No Google OAuth client configuration found.")
         return None
 
+    def _client_config_from_manager(self) -> Optional[Dict[str, Any]]:
+        """Try to obtain client config from a config_manager if present."""
+        if self.config_manager is None:
+            try:
+                from voice_recorder.config_manager import config_manager as _cfg_mgr  # type: ignore
+
+                self.config_manager = _cfg_mgr
+            except Exception:
+                self.config_manager = None
+                logger.info("config_manager not available; falling back to client_secrets.json if present")
+                return None
+
+        try:
+            get_cfg = getattr(self.config_manager, "get_google_credentials_config", None)
+            if callable(get_cfg):
+                cfg = get_cfg()
+                if isinstance(cfg, dict):
+                    return cfg
+        except Exception as e:  # pragma: no cover
+            logger.error("Error from config_manager: %s", e)
+        return None
+
+    def _client_config_from_env(self) -> Optional[Dict[str, Any]]:
+        """Load client config from VRP_CLIENT_SECRETS environment variable if set."""
+        env_path = os.environ.get("VRP_CLIENT_SECRETS")
+        if not env_path:
+            return None
+        try:
+            envp = Path(env_path)
+            if envp.exists():
+                logger.info("Loading Google client config from VRP_CLIENT_SECRETS: %s", envp)
+                return json.loads(envp.read_text(encoding="utf-8"))
+            else:
+                logger.warning("VRP_CLIENT_SECRETS is set but file not found: %s", envp)
+        except Exception as e:  # pragma: no cover
+            logger.error("Error reading VRP_CLIENT_SECRETS file %s: %s", env_path, e)
+        return None
+
+    def _client_config_from_file(self) -> Optional[Dict[str, Any]]:
+        """Load client config from the default client_secrets.json file if present."""
+        if not self.client_secrets_file.exists():
+            return None
+        try:
+            logger.info("Loading Google client config from %s", self.client_secrets_file)
+            return json.loads(self.client_secrets_file.read_text(encoding="utf-8"))
+        except Exception as e:  # pragma: no cover
+            logger.error("Error reading client_secrets.json: %s", e)
+        return None
+
     def _load_credentials_if_present(self) -> None:
-        # Try to load credentials from the OS keyring first when enabled. Fall back
-        # to the file-based token.json when keyring is disabled/unavailable.
         if not GOOGLE_APIS_AVAILABLE:
             return
 
-        # Prefer loading from the local token file in the app credentials dir.
-        # This avoids inadvertently loading developer keyring credentials when
-        # running tests or when the app_dir is a repository checkout.
-        if self.credentials_file.exists():
-            try:
-                Credentials = _import_credentials()
-                from_file = getattr(Credentials, "from_authorized_user_file", None)
-                if from_file:
-                    self.credentials = from_file(str(self.credentials_file), self.SCOPES)
-                    self._refresh_if_needed()
-                    return
-            except Exception as e:  # pragma: no cover
-                logger.error("Error loading credentials from token file: %s", e)
-                self.credentials = None
+        # Try file-based credentials first
+        if self._load_credentials_from_file():
+            return
 
-        # If no credentials file was present or loading failed, try keyring as
-        # a fallback when explicitly enabled. Keyring may contain system-wide
-        # credentials which we prefer not to surface automatically for test runs.
+        # Then try keyring if explicitly enabled
         if self.use_keyring:
-            try:
-                import keyring  # type: ignore
+            self._load_credentials_from_keyring()
 
-                key_name = f"VoiceRecorderPro:credentials:{self.credentials_file.name}"
-                stored = keyring.get_password("VoiceRecorderPro", key_name)
-                if stored:
-                    try:
-                        data = json.loads(stored)
-                        Credentials = _import_credentials()
-                        from_info = getattr(Credentials, "from_authorized_user_info", None)
-                        if from_info:
-                            self.credentials = from_info(data, self.SCOPES)
-                            # Ensure tokens are fresh or refreshed if expired
-                            self._refresh_if_needed()
-                            return
-                    except Exception:
-                        # If parsing or constructing credentials fails, log and fall through
-                        logger.debug("Keyring credential found but failed to load; giving up")
+    def _load_credentials_from_file(self) -> bool:
+        """Return True if credentials were loaded from the token file."""
+        if not self.credentials_file.exists():
+            return False
+        try:
+            Credentials = _import_credentials()
+            from_file = getattr(Credentials, "from_authorized_user_file", None)
+            if from_file:
+                self.credentials = from_file(str(self.credentials_file), self.SCOPES)
+                return True
+        except Exception as e:  # pragma: no cover
+            logger.error("Error loading credentials from token file: %s", e)
+            self.credentials = None
+        return False
+
+    def _load_credentials_from_keyring(self) -> bool:
+        """Return True if credentials were loaded from the OS keyring."""
+        try:
+            import keyring  # type: ignore
+
+            key_name = f"VoiceRecorderPro:credentials:{self.credentials_file.name}"
+            stored = keyring.get_password("VoiceRecorderPro", key_name)
+            if not stored:
+                return False
+            try:
+                data = json.loads(stored)
+                Credentials = _import_credentials()
+                from_info = getattr(Credentials, "from_authorized_user_info", None)
+                if from_info:
+                    self.credentials = from_info(data, self.SCOPES)
+                    # Ensure tokens are fresh or refreshed if expired
+                    self._refresh_if_needed()
+                    return True
             except Exception:
-                # keyring not available or failure; nothing more to do
-                logger.debug("Keyring not available or read failed; skipping keyring read")
+                logger.debug("Keyring credential found but failed to load; giving up")
+        except Exception:
+            logger.debug("Keyring not available or read failed; skipping keyring read")
+        return False
 
     def _refresh_if_needed(self) -> None:
         # Quick checks first (fast path): no creds / not expired / no refresh token
@@ -566,7 +586,7 @@ def _restrict_file_permissions(path: Path) -> None:
         pass
 
 
-def _acquire_path_lock_for_write(path: Path):
+def _acquire_path_lock_for_write(path: Path) -> IO[bytes]:
     """Acquire an exclusive lock for a path across processes. Returns an open file object
     that holds the lock. Caller must call _release_path_lock(fileobj) to release it.
     """
@@ -592,7 +612,7 @@ def _acquire_path_lock_for_write(path: Path):
     return f
 
 
-def _release_path_lock(fobj) -> None:
+def _release_path_lock(fobj: IO[bytes]) -> None:
     try:
         if os.name == "posix":
             import fcntl

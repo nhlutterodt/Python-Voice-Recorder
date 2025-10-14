@@ -1,7 +1,6 @@
 import sys
 import os
 import importlib
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest

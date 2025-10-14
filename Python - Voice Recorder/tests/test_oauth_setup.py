@@ -9,9 +9,10 @@ from pathlib import Path
 def check_dependencies():
     """Check if required packages are installed"""
     try:
-        import google.auth
-        import google_auth_oauthlib
-        import googleapiclient
+        # These imports are presence checks; mark as intentionally unused for linters
+        import google.auth  # noqa: F401
+        import google_auth_oauthlib  # noqa: F401
+        import googleapiclient  # noqa: F401
         print("✅ All Google API packages installed")
         return True
     except ImportError as e:
@@ -56,10 +57,11 @@ def check_config_file():
 def test_cloud_import():
     """Test if cloud modules can be imported"""
     try:
-        from cloud.auth_manager import GoogleAuthManager
-        from cloud.drive_manager import GoogleDriveManager
-        from cloud.feature_gate import FeatureGate
-        from cloud.cloud_ui import CloudUI
+        # Presence-only imports for CI; keep tests non-fatal if missing
+        from cloud.auth_manager import GoogleAuthManager  # noqa: F401
+        from cloud.drive_manager import GoogleDriveManager  # noqa: F401
+        from cloud.feature_gate import FeatureGate  # noqa: F401
+        from cloud.cloud_ui import CloudUI  # noqa: F401
         print("✅ All cloud modules imported successfully")
         assert True
     except ImportError as e:

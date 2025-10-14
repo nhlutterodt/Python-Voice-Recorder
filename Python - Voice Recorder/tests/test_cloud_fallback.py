@@ -1,5 +1,3 @@
-import pytest
-import os
 
 from cloud.cloud_fallback import CloudFallbackWidget
 

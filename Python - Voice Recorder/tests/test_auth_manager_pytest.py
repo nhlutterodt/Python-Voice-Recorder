@@ -85,7 +85,7 @@ def test_build_service_basic():
     manager = GoogleAuthManager()
     
     # Test without authentication - should raise NotAuthenticatedError
-    from cloud.exceptions import NotAuthenticatedError, APILibrariesMissingError
+    from cloud.exceptions import NotAuthenticatedError
     manager.credentials = None
     with pytest.raises(NotAuthenticatedError):
         manager.build_service("drive", "v3")

@@ -9,18 +9,16 @@ import traceback
 from pathlib import Path
 from typing import List, Dict, Any
 
-# Add current directory to path
-sys.path.insert(0, str(Path(__file__).parent))
-
-# Import all critical enhanced components
+# Import all critical enhanced components via package imports
 try:
-    from core.database_context import DatabaseConfig, DatabaseContextManager
-    from core.database_health import DatabaseHealthMonitor, HealthCheckResult, HealthCheckSeverity
-    from models.database import SessionLocal, engine
+    from voice_recorder.core.database_context import DatabaseConfig, DatabaseContextManager
+    from voice_recorder.core.database_health import DatabaseHealthMonitor
+    # Import module-level objects used at runtime
+    from voice_recorder.models.database import SessionLocal
     print("✅ All critical enhanced components imported successfully")
 except ImportError as e:
     print(f"❌ Failed to import critical components: {e}")
-    sys.exit(1)
+    raise
 
 
 class CriticalComponentsTester:

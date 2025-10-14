@@ -9,11 +9,9 @@ Keeping this in a separate small module makes packaging entrypoints and tests si
 """
 import sys
 from PySide6.QtWidgets import QApplication
-from pathlib import Path
 
 # Use canonical package-root imports to avoid ambiguous module identities
 from voice_recorder.enhanced_main import EnhancedAudioEditor, start_job_worker
-from voice_recorder.config_manager import config_manager
 from voice_recorder.core.logging_config import setup_application_logging
 
 logger = setup_application_logging("INFO")

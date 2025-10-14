@@ -7,7 +7,6 @@ project's src directory without requiring an editable install.
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 # Compute the absolute path to the project's src directory, which is located

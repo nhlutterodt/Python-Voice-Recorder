@@ -1,6 +1,4 @@
 from pathlib import Path
-import os
-import tempfile
 from unittest.mock import patch, Mock
 
 from cloud.auth_manager import GoogleAuthManager

@@ -43,12 +43,53 @@ try:
         StorageConfigValidationError
     )
     _import_success = True
-except ImportError as e:
-    print(f"Import error in facade: {e}")
-    _import_success = False
 except Exception as e:
-    print(f"Other error in facade: {e}")
+    # We want the facade to be import-safe even when optional runtime
+    # dependencies (like audio backends) are missing. Tests and other
+    # consumers expect to be able to `import services.enhanced_file_storage`
+    # without the package raising at import-time. Provide clear lazy
+    # placeholders that raise a descriptive ImportError when actually used.
+    _import_exc = e
     _import_success = False
+
+    def _make_missing_class(name: str):
+        class _Missing:
+            def __init__(self, *a, **kw):
+                raise ImportError(
+                    f"{name} is unavailable because importing the modular "
+                    f"implementation failed: {_import_exc!s}.\n"
+                    f"Install the optional dependencies or run tests with the "
+                    f"project src on PYTHONPATH."
+                )
+
+        _Missing.__name__ = name
+        return _Missing
+
+    def _make_missing_callable(name: str):
+        def _call(*a, **kw):
+            raise ImportError(
+                f"{name} is unavailable because importing the modular "
+                f"implementation failed: {_import_exc!s}.\n"
+                f"Install the optional dependencies or run tests with the "
+                f"project src on PYTHONPATH."
+            )
+
+        _call.__name__ = name
+        return _call
+
+    # Provide placeholders for the public API so `from services.enhanced_file_storage import ...`
+    # always succeeds at import time; errors are raised when callers try to instantiate
+    # or call the unavailable implementations.
+    EnhancedFileStorageService = _make_missing_class('EnhancedFileStorageService')
+    StorageConfig = _make_missing_class('StorageConfig')
+    FileMetadataCalculator = _make_missing_class('FileMetadataCalculator')
+
+    StorageValidationError = type('StorageValidationError', (Exception,), {})
+    FileMetadataError = type('FileMetadataError', (Exception,), {})
+    DatabaseSessionError = type('DatabaseSessionError', (Exception,), {})
+    FileConstraintError = type('FileConstraintError', (Exception,), {})
+    StorageOperationError = type('StorageOperationError', (Exception,), {})
+    StorageConfigValidationError = type('StorageConfigValidationError', (Exception,), {})
 
 # Re-export everything for backward compatibility
 __all__ = [

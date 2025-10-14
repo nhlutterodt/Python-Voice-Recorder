@@ -1,4 +1,3 @@
-import tempfile
 from sqlalchemy import create_engine, inspect
 
 

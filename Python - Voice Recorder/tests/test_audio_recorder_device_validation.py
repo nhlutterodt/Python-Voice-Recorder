@@ -1,6 +1,3 @@
-import os
-import numpy as np
-import pytest
 
 from audio_recorder import AudioRecorderManager
 
