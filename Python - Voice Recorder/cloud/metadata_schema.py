@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Optional, Dict, Any
-from pathlib import Path
-from datetime import datetime
 import os
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 # Canonical appProperties keys
 KEY_SOURCE = "source"
@@ -41,7 +41,10 @@ def build_upload_metadata(
     if folder_id:
         metadata["parents"] = [folder_id]
 
-    metadata["description"] = description or f"Audio recording uploaded from Voice Recorder Pro on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    metadata["description"] = (
+        description
+        or f"Audio recording uploaded from Voice Recorder Pro on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
 
     props: Dict[str, str] = {
         KEY_SOURCE: "Voice Recorder Pro",

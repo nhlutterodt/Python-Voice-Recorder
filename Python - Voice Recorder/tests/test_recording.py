@@ -1,14 +1,17 @@
 # test_recording.py
 # Test script to validate audio recording functionality
 
+import os
 import sys
+
 from PySide6.QtWidgets import QApplication
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-from audio_recorder import AudioRecorderManager
-import sounddevice as sd
 import time
-import os
+
+import sounddevice as sd
+from audio_recorder import AudioRecorderManager
 
 
 def test_audio_devices():
@@ -16,12 +19,12 @@ def test_audio_devices():
     print("🔍 Testing Audio Device Availability...")
     try:
         devices = sd.query_devices()
-        input_devices = [d for d in devices if d.get('max_input_channels', 0) > 0]
+        input_devices = [d for d in devices if d.get("max_input_channels", 0) > 0]
 
         print(f"Found {len(input_devices)} input devices:")
         for i, device in enumerate(input_devices):
-            name = device.get('name', 'Unknown')
-            chans = device.get('max_input_channels', 0)
+            name = device.get("name", "Unknown")
+            chans = device.get("max_input_channels", 0)
             print(f"  {i+1}. {name} - {chans} channels")
 
         assert len(input_devices) >= 0
@@ -34,58 +37,62 @@ def test_audio_devices():
 def test_recording_manager():
     """Test AudioRecorderManager functionality"""
     print("\n🎤 Testing AudioRecorderManager...")
-    
+
     # Create QApplication for Qt components
-    app = QApplication(sys.argv) if not QApplication.instance() else QApplication.instance()
-    
+    app = (
+        QApplication(sys.argv)
+        if not QApplication.instance()
+        else QApplication.instance()
+    )
+
     recorder = AudioRecorderManager()
-    
+
     # Test device validation
     devices = recorder.get_available_devices()
     print(f"Available recording devices: {len(devices)}")
-    
+
     if not devices:
         print("❌ No recording devices available - recording test skipped")
         assert True
         return
-    
+
     # Test short recording
     print("🔴 Starting 3-second test recording...")
     success = recorder.start_recording("test_recording.wav", sample_rate=44100)
-    
+
     if not success:
         print("❌ Failed to start recording")
         assert True
         return
-    
+
     # Wait for 3 seconds
     start_time = time.time()
     while time.time() - start_time < 3.0:
         if app:
             app.processEvents()  # Keep Qt responsive
         time.sleep(0.1)
-    
+
     # Stop recording
     recorder.stop_recording()
-    
+
     # Wait for completion
     time.sleep(1)
     if app:
         app.processEvents()
-    
+
     # Check if file was created
     test_file = "recordings/raw/test_recording.wav"
     if os.path.exists(test_file):
         file_size = os.path.getsize(test_file)
         print(f"✅ Test recording successful: {file_size} bytes")
-        
+
         # Clean up test file
         try:
             os.remove(test_file)
             print("🧹 Test file cleaned up")
         except Exception:
             print("⚠️ Could not remove test file")
-        
+
         assert True
     else:
         print("❌ Test recording file not found")
@@ -97,18 +104,18 @@ def main():
     """Run all audio recording tests"""
     print("🚀 AUDIO RECORDING FUNCTIONALITY TEST")
     print("=" * 50)
-    
+
     # Test 1: Device availability
     devices_ok = test_audio_devices()
-    
+
     if not devices_ok:
         print("\n❌ CRITICAL: No audio input devices available")
         print("Please check your microphone connection and permissions")
         return False
-    
+
     # Test 2: Recording manager
     recording_ok = test_recording_manager()
-    
+
     print("\n" + "=" * 50)
     if devices_ok and recording_ok:
         print("✅ ALL TESTS PASSED - Audio recording ready!")

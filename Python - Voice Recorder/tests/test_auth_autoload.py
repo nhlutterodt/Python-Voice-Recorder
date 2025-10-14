@@ -1,4 +1,3 @@
-import tempfile
 from pathlib import Path
 
 from cloud.auth_manager import GoogleAuthManager

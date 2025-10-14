@@ -1,9 +1,9 @@
+import glob
 import importlib
 import importlib.util
+import os
 import sys
 import traceback
-import glob
-import os
 
 
 def test_probe_enhanced_file_storage_import():
@@ -27,7 +27,9 @@ def test_probe_enhanced_file_storage_import():
         # List candidates in the workspace matching the filename to detect shadowing
         cwd = os.getcwd()
         print("cwd:", cwd)
-        matches = glob.glob(os.path.join(cwd, "**", "enhanced_file_storage.py"), recursive=True)
+        matches = glob.glob(
+            os.path.join(cwd, "**", "enhanced_file_storage.py"), recursive=True
+        )
         print("Found enhanced_file_storage.py matches:")
         for m in matches:
             print(" -", m)

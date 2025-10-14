@@ -1,8 +1,9 @@
+import logging
 import os
 import tempfile
-import logging
-import pytest
 from typing import Any
+
+import pytest
 
 
 def test_drive_manager_not_authenticated(monkeypatch: Any, caplog: Any):
@@ -14,12 +15,15 @@ def test_drive_manager_not_authenticated(monkeypatch: Any, caplog: Any):
             return False
 
         def get_credentials(self):  # should never be called
-            raise AssertionError("get_credentials should not be called when not authenticated")
+            raise AssertionError(
+                "get_credentials should not be called when not authenticated"
+            )
 
     mgr = dm.GoogleDriveManager(StubAuth())
 
     # _get_service should raise a clear auth error first
     from cloud.exceptions import NotAuthenticatedError
+
     with pytest.raises(NotAuthenticatedError):
         mgr._get_service()  # type: ignore[attr-defined]
 
@@ -34,7 +38,7 @@ def test_drive_manager_not_authenticated(monkeypatch: Any, caplog: Any):
     fd, path = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     try:
-        uploader = getattr(mgr, 'get_uploader', None)
+        uploader = getattr(mgr, "get_uploader", None)
         if callable(uploader):
             with pytest.raises(NotAuthenticatedError):
                 mgr.get_uploader().upload(path)

@@ -4,6 +4,7 @@ This module provides the same public classes used elsewhere but keeps
 heavy runtime imports (sounddevice, PySide6, numpy, etc.) inside functions
 or methods so importing the package is safe for linting, tests, and CI.
 """
+
 from typing import Any, Dict, List, Optional
 
 # Lightweight placeholders for types used in signatures. Real imports are
@@ -18,14 +19,22 @@ class AudioRecorderThread:
     This stub provides the surface area needed by other modules/tests.
     """
 
-    def __init__(self, output_path: str, sample_rate: int = 44100, channels: int = 1, storage_config: Optional[Any] = None):
+    def __init__(
+        self,
+        output_path: str,
+        sample_rate: int = 44100,
+        channels: int = 1,
+        storage_config: Optional[Any] = None,
+    ):
         self.output_path = output_path
         self.sample_rate = sample_rate
         self.channels = channels
         self.storage_config = storage_config
 
     def start(self) -> None:
-        raise RuntimeError("AudioRecorderThread.start(): runtime audio backends are required")
+        raise RuntimeError(
+            "AudioRecorderThread.start(): runtime audio backends are required"
+        )
 
     def stop_recording(self) -> None:
         # no-op for lint/test import-time safety
@@ -39,7 +48,9 @@ class AudioLevelMonitor:
         self.sample_rate = sample_rate
 
     def start_monitoring(self) -> None:
-        raise RuntimeError("AudioLevelMonitor.start_monitoring(): runtime audio backends are required")
+        raise RuntimeError(
+            "AudioLevelMonitor.start_monitoring(): runtime audio backends are required"
+        )
 
     def stop_monitoring(self) -> None:
         return None
@@ -76,7 +87,9 @@ class EnhancedAudioRecorderManager:
         except Exception as exc:  # pragma: no cover - runtime dependency
             raise RuntimeError("Runtime audio/GUI dependencies are required") from exc
 
-    def start_recording(self, filename: Optional[str] = None, sample_rate: int = 44100) -> bool:
+    def start_recording(
+        self, filename: Optional[str] = None, sample_rate: int = 44100
+    ) -> bool:
         """Start recording. This will import runtime dependencies as needed."""
         # Ensure dependencies are available; will raise on import errors.
         self._ensure_runtime_dependencies()
@@ -116,11 +129,13 @@ class EnhancedAudioRecorderManager:
             input_devices: List[Dict[str, Any]] = []
             for i, d in enumerate(devices):  # type: ignore
                 if d.get("max_input_channels", 0) > 0:
-                    input_devices.append({
-                        "index": i,
-                        "name": d.get("name", ""),
-                        "channels": d.get("max_input_channels", 0),
-                    })
+                    input_devices.append(
+                        {
+                            "index": i,
+                            "name": d.get("name", ""),
+                            "channels": d.get("max_input_channels", 0),
+                        }
+                    )
             return input_devices
         except Exception:
             return []

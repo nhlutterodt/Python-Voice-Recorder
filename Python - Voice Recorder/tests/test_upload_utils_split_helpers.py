@@ -1,5 +1,4 @@
 import pytest
-
 from cloud.upload_utils import _check_and_handle_cancel, _handle_progress
 
 

@@ -9,17 +9,17 @@ def test_create_job_queue_factory_defaults_to_sqlite():
 
 
 def test_file_job_queue_enqueue_and_process(tmp_path: Path):
-    p = tmp_path / 'queue.json'
+    p = tmp_path / "queue.json"
     q = job_queue.FileJobQueue(path=p)
 
     called = {}
 
     def handler(payload):
-        called['payload'] = payload
+        called["payload"] = payload
         return True
 
-    jid = q.enqueue('send', {'a': 1}, max_retries=2)
+    jid = q.enqueue("send", {"a": 1}, max_retries=2)
     assert isinstance(jid, int)
-    processed = q.process_once({'send': handler})
+    processed = q.process_once({"send": handler})
     assert processed == jid
-    assert called.get('payload') == {'a': 1}
+    assert called.get("payload") == {"a": 1}

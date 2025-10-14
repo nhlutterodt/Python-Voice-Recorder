@@ -4,6 +4,7 @@ This module provides a deterministic content-hash function so uploads
 can be annotated with a hash and used to detect duplicates server-side
 or during local pre-checks.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -22,7 +23,7 @@ def compute_content_sha256(file_path: str, chunk_size: int = 65536) -> Optional[
         if not p.exists() or not p.is_file():
             return None
 
-        with p.open('rb') as fh:
+        with p.open("rb") as fh:
             while True:
                 chunk = fh.read(chunk_size)
                 if not chunk:

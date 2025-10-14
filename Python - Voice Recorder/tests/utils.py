@@ -11,6 +11,7 @@ class DummyAuthManager:
     """A minimal auth manager used in tests. Stores the last created
     instance on the class so tests can inspect it.
     """
+
     last_instance = None
 
     def __init__(self, use_keyring=True, *a, **kw):
@@ -32,6 +33,7 @@ class DummyCloudUI(QWidget):
     """A QWidget subclass so it can be inserted into tab widgets during
     tests. Simply records the auth/drive/feature_gate passed to it.
     """
+
     def __init__(self, auth, drive, feature_gate):
         super().__init__()
         self.auth = auth

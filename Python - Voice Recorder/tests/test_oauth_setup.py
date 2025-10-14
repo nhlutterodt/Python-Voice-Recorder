@@ -6,6 +6,7 @@ Run this after placing client_secrets.json in the config/ folder
 
 from pathlib import Path
 
+
 def check_dependencies():
     """Check if required packages are installed"""
     try:
@@ -13,29 +14,37 @@ def check_dependencies():
         import google.auth  # noqa: F401
         import google_auth_oauthlib  # noqa: F401
         import googleapiclient  # noqa: F401
+
         print("✅ All Google API packages installed")
         return True
     except ImportError as e:
         print(f"❌ Missing dependency: {e}")
-        print("💡 Run: pip install google-auth google-auth-oauthlib google-api-python-client")
+        print(
+            "💡 Run: pip install google-auth google-auth-oauthlib google-api-python-client"
+        )
         return False
+
 
 def check_config_file():
     """Check if client_secrets.json exists"""
     config_file = Path(__file__).parent / "config" / "client_secrets.json"
-    
+
     if config_file.exists():
         print(f"✅ Configuration file found: {config_file}")
-        
+
         # Validate JSON structure
         try:
             import json
-            with open(config_file, 'r') as f:
+
+            with open(config_file, "r") as f:
                 data = json.load(f)
-            
-            if 'installed' in data:
-                client_id = data['installed'].get('client_id', '')
-                if client_id and client_id != 'your-client-id.apps.googleusercontent.com':
+
+            if "installed" in data:
+                client_id = data["installed"].get("client_id", "")
+                if (
+                    client_id
+                    and client_id != "your-client-id.apps.googleusercontent.com"
+                ):
                     print("✅ Client ID looks valid")
                     return True
                 else:
@@ -44,7 +53,7 @@ def check_config_file():
             else:
                 print("❌ Invalid JSON structure - should have 'installed' key")
                 return False
-                
+
         except json.JSONDecodeError:
             print("❌ Invalid JSON file")
             return False
@@ -54,14 +63,16 @@ def check_config_file():
         print("📍 Place it in: config/client_secrets.json")
         return False
 
+
 def test_cloud_import():
     """Test if cloud modules can be imported"""
     try:
         # Presence-only imports for CI; keep tests non-fatal if missing
         from cloud.auth_manager import GoogleAuthManager  # noqa: F401
+        from cloud.cloud_ui import CloudUI  # noqa: F401
         from cloud.drive_manager import GoogleDriveManager  # noqa: F401
         from cloud.feature_gate import FeatureGate  # noqa: F401
-        from cloud.cloud_ui import CloudUI  # noqa: F401
+
         print("✅ All cloud modules imported successfully")
         assert True
     except ImportError as e:
@@ -69,10 +80,12 @@ def test_cloud_import():
         # Optional in CI; keep non-fatal
         assert True
 
+
 def test_auth_manager_init():
     """Test if auth manager can be initialized"""
     try:
         from cloud.auth_manager import GoogleAuthManager
+
         GoogleAuthManager()
         print("✅ Authentication manager initialized")
         assert True
@@ -81,37 +94,40 @@ def test_auth_manager_init():
         # Optional in CI; keep non-fatal
         assert True
 
+
 def main():
     """Run all tests"""
     print("🔍 OAUTH SETUP VERIFICATION")
     print("=" * 40)
-    
+
     tests = [
         ("Checking dependencies", check_dependencies),
-        ("Checking configuration file", check_config_file), 
+        ("Checking configuration file", check_config_file),
         ("Testing cloud module imports", test_cloud_import),
-        ("Testing auth manager", test_auth_manager_init)
+        ("Testing auth manager", test_auth_manager_init),
     ]
-    
+
     passed = 0
     total = len(tests)
-    
+
     for test_name, test_func in tests:
         print(f"\n🧪 {test_name}...")
         if test_func():
             passed += 1
         else:
             print("💡 Fix this issue before proceeding")
-    
+
     print(f"\n📊 RESULTS: {passed}/{total} tests passed")
-    
+
     if passed == total:
         print("🎉 OAuth setup is complete!")
         print("🚀 Ready to test authentication:")
-        print("   python -c \"from cloud.auth_manager import GoogleAuthManager; auth = GoogleAuthManager(); auth.authenticate()\"")
+        print(
+            '   python -c "from cloud.auth_manager import GoogleAuthManager; auth = GoogleAuthManager(); auth.authenticate()"'
+        )
     else:
         print("⚠️ Setup incomplete. Fix the issues above.")
-        
+
         if not Path("config/client_secrets.json").exists():
             print("\n📋 NEXT STEPS:")
             print("1. 🌐 Go to Google Cloud Console")
@@ -119,6 +135,7 @@ def main():
             print("3. 📥 Download client_secrets.json")
             print("4. 📁 Place in config/ folder")
             print("5. ▶️ Run this test again")
+
 
 if __name__ == "__main__":
     main()

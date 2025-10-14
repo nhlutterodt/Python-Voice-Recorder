@@ -1,15 +1,20 @@
 from __future__ import annotations
 
-from typing import List, Optional, TYPE_CHECKING, Any
+from typing import List, Optional
 
 # Guard PySide6 imports so tests can import this module in headless CI
 _HAS_QT = True
 try:
-    from PySide6.QtWidgets import (
-        QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem,
-        QPushButton, QHBoxLayout, QMessageBox,
-    )
     from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import (
+        QDialog,
+        QHBoxLayout,
+        QMessageBox,
+        QPushButton,
+        QTableWidget,
+        QTableWidgetItem,
+        QVBoxLayout,
+    )
 except Exception:  # pragma: no cover - environment dependent
     _HAS_QT = False
 
@@ -37,6 +42,7 @@ except Exception:  # pragma: no cover - environment dependent
 
     class QMessageBox:  # type: ignore
         StandardButton = type("_SB", (), {})
+
         @staticmethod
         def information(*args, **kwargs):
             pass
@@ -53,10 +59,21 @@ class JobDialog(QDialog):
         self.setWindowTitle("Upload Jobs")
         self.resize(700, 400)
 
-    layout = QVBoxLayout(self)
+        layout = QVBoxLayout(self)
 
-    self.table = QTableWidget(0, 8)
-        self.table.setHorizontalHeaderLabels(["ID", "Status", "Attempts", "Max", "Progress", "File", "Last Error", "Drive ID"])
+        self.table = QTableWidget(0, 8)
+        self.table.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Status",
+                "Attempts",
+                "Max",
+                "Progress",
+                "File",
+                "Last Error",
+                "Drive ID",
+            ]
+        )
         self.table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.table)
 
@@ -100,9 +117,9 @@ class JobDialog(QDialog):
             # Progress: show uploaded/total if available
             prog = ""
             try:
-                if getattr(j, 'uploaded_bytes', 0) and getattr(j, 'total_bytes', None):
+                if getattr(j, "uploaded_bytes", 0) and getattr(j, "total_bytes", None):
                     prog = f"{int(j.uploaded_bytes)}/{int(j.total_bytes)}"
-                elif getattr(j, 'uploaded_bytes', 0):
+                elif getattr(j, "uploaded_bytes", 0):
                     prog = f"{int(j.uploaded_bytes)} bytes"
             except Exception:
                 prog = ""
@@ -133,7 +150,7 @@ class JobDialog(QDialog):
         for job_id in ids:
             try:
                 if update_job_status:
-                    update_job_status(job_id, 'pending')
+                    update_job_status(job_id, "pending")
             except Exception:
                 # Best-effort: continue updating other jobs
                 pass
@@ -157,9 +174,10 @@ class JobDialog(QDialog):
                 if set_job_cancel_requested:
                     set_job_cancel_requested(job_id)
                 if update_job_status:
-                    update_job_status(job_id, 'cancelled')
+                    update_job_status(job_id, "cancelled")
             except Exception:
                 pass
-        QMessageBox.information(self, "Cancelled", "Selected jobs cancelled (requested)")
+        QMessageBox.information(
+            self, "Cancelled", "Selected jobs cancelled (requested)"
+        )
         self.refresh()
-

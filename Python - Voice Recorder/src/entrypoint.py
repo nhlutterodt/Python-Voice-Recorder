@@ -7,12 +7,15 @@ This module exists to clearly document and encapsulate the sequence:
 
 Keeping this in a separate small module makes packaging entrypoints and tests simpler.
 """
+
 import sys
+
 from PySide6.QtWidgets import QApplication
+
+from voice_recorder.core.logging_config import setup_application_logging
 
 # Use canonical package-root imports to avoid ambiguous module identities
 from voice_recorder.enhanced_main import EnhancedAudioEditor, start_job_worker
-from voice_recorder.core.logging_config import setup_application_logging
 
 logger = setup_application_logging("INFO")
 
@@ -35,12 +38,12 @@ def run_app(use_keyring: bool = True) -> int:
     window.show()
 
     # Start the job worker supervisor with the actual DriveManager instance
-    dm = getattr(window, 'drive_manager', None)
+    dm = getattr(window, "drive_manager", None)
     start_job_worker(dm)
 
     logger.info("Application event loop starting from entrypoint")
     return app.exec()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(run_app())

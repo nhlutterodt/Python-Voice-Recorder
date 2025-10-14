@@ -7,7 +7,17 @@ and provides user tier management for cloud-enabled functionality.
 
 import logging
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable, TypeVar, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    TypeVar,
+    cast,
+    runtime_checkable,
+)
 
 try:
     from typing import ParamSpec  # Python 3.10+
@@ -30,11 +40,9 @@ class UserTier(Enum):
 class AuthManagerProtocol(Protocol):
     """Minimal contract expected from an authentication manager."""
 
-    def is_authenticated(self) -> bool:
-        ...
+    def is_authenticated(self) -> bool: ...
 
-    def get_user_info(self) -> Optional[Dict[str, Any]]:
-        ...
+    def get_user_info(self) -> Optional[Dict[str, Any]]: ...
 
 
 class FeatureGate:
@@ -108,7 +116,9 @@ class FeatureGate:
         features: Dict[str, Any] = self.feature_matrix.get(user_tier, {})
         return bool(features.get(feature_name, False))
 
-    def get_feature_value(self, feature_name: str, default: Optional[Any] = None) -> Any:
+    def get_feature_value(
+        self, feature_name: str, default: Optional[Any] = None
+    ) -> Any:
         """
         Get the value of a feature for the current user
 
@@ -233,7 +243,9 @@ class FeatureGate:
         Returns:
             bool: True if cloud upload is available
         """
-        return self.auth_manager.is_authenticated() and self.is_feature_enabled("cloud_upload")
+        return self.auth_manager.is_authenticated() and self.is_feature_enabled(
+            "cloud_upload"
+        )
 
     def get_cloud_storage_limit(self) -> int:
         """
@@ -248,17 +260,25 @@ class FeatureGate:
 class FeatureDecorator:
     """Decorator for feature-gated methods"""
 
-    def __init__(self, feature_gate: FeatureGate, message_handler: Optional[Callable[[str], None]] = None):
+    def __init__(
+        self,
+        feature_gate: FeatureGate,
+        message_handler: Optional[Callable[[str], None]] = None,
+    ):
         self.feature_gate = feature_gate
         if message_handler is not None:
             self.message_handler = message_handler
         else:
+
             def _default_handler(msg: str) -> None:
                 logging.warning(msg)
                 print(msg)
+
             self.message_handler = _default_handler
 
-    def requires_feature(self, feature_name: str, show_message: bool = True) -> Callable[[Callable[P, R]], Callable[P, Optional[R]]]:
+    def requires_feature(
+        self, feature_name: str, show_message: bool = True
+    ) -> Callable[[Callable[P, R]], Callable[P, Optional[R]]]:
         """
         Decorator that checks if a feature is enabled before execution
 

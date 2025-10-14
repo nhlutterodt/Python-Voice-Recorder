@@ -1,5 +1,7 @@
+from models.database import Base
+from models.database import db_context as app_db_context
+from models.database import engine
 from services.recording_service import RecordingService
-from models.database import engine, Base, db_context as app_db_context
 
 
 def test_create_from_file(tmp_path):

@@ -17,11 +17,11 @@ from pathlib import Path
 from typing import Optional, cast
 
 import numpy as np
-from PySide6.QtWidgets import QWidget, QVBoxLayout
+from matplotlib.axes import Axes
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from matplotlib.axes import Axes
 from numpy.typing import NDArray
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 # Defer pydub imports to runtime to avoid import-time failures when native
 # audio libraries (audioop/pyaudioop) are missing. Tests that need full
@@ -30,6 +30,7 @@ AudioSegment = None
 _HAS_PYDUB = False
 try:
     from pydub import AudioSegment  # type: ignore
+
     _HAS_PYDUB = True
 except Exception:
     AudioSegment = None
@@ -75,7 +76,8 @@ class WaveformViewer(QWidget):
         if sys.version_info < (3, 12):
             logger.warning(
                 "Detected Python %s.%s; recommend Python 3.12 in a virtual environment for this app.",
-                sys.version_info.major, sys.version_info.minor
+                sys.version_info.major,
+                sys.version_info.minor,
             )
 
         self._max_points = max_points
@@ -95,13 +97,21 @@ class WaveformViewer(QWidget):
                 logger.exception("Failed to render waveform: %s", exc)
                 # Render a friendly error state on the canvas
                 self._ax.clear()
-                self._ax.text(0.5, 0.5, f"Error loading audio:\n{exc}", ha="center", va="center")
+                self._ax.text(
+                    0.5, 0.5, f"Error loading audio:\n{exc}", ha="center", va="center"
+                )
                 self._ax.set_axis_off()
                 self._canvas.draw()
         else:
             logger.info("pydub not available; WaveformViewer will be a placeholder.")
             self._ax.clear()
-            self._ax.text(0.5, 0.5, "Waveform unavailable (pydub missing)", ha="center", va="center")
+            self._ax.text(
+                0.5,
+                0.5,
+                "Waveform unavailable (pydub missing)",
+                ha="center",
+                va="center",
+            )
             self._ax.set_axis_off()
             self._canvas.draw()
 
@@ -144,7 +154,9 @@ class WaveformViewer(QWidget):
         return cast("AudioSegment", AudioSegment.from_file(path.as_posix()))
 
     @staticmethod
-    def _extract_normalized_mono_samples(audio: "AudioSegment") -> tuple[NDArray[np.float32], int]:
+    def _extract_normalized_mono_samples(
+        audio: "AudioSegment",
+    ) -> tuple[NDArray[np.float32], int]:
         """
         Returns (samples_float32, sample_rate). Samples normalized to [-1, 1].
         If stereo+, averages channels into mono for a clean, quick preview.

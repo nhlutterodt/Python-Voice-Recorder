@@ -1,14 +1,13 @@
 import os
 from pathlib import Path
 
-
 from cloud.metadata_schema import (
-    build_upload_metadata,
-    KEY_SOURCE,
-    KEY_UPLOAD_DATE,
-    KEY_FILE_SIZE,
-    KEY_TAGS,
     KEY_CONTENT_SHA256,
+    KEY_FILE_SIZE,
+    KEY_SOURCE,
+    KEY_TAGS,
+    KEY_UPLOAD_DATE,
+    build_upload_metadata,
 )
 
 
@@ -16,7 +15,14 @@ def test_build_upload_metadata_happy_path(tmp_path):
     p = tmp_path / "recording.wav"
     p.write_bytes(b"RIFF....WAVE")
 
-    md = build_upload_metadata(str(p), title="My Rec", description="desc", tags=["a", "b"], content_sha256="deadbeef", folder_id="fld-1")
+    md = build_upload_metadata(
+        str(p),
+        title="My Rec",
+        description="desc",
+        tags=["a", "b"],
+        content_sha256="deadbeef",
+        folder_id="fld-1",
+    )
 
     # top-level fields
     assert md["name"] == "My Rec"
@@ -36,7 +42,9 @@ def test_build_upload_metadata_missing_file(tmp_path):
     # point to a non-existent file
     p = tmp_path / "missing.wav"
 
-    md = build_upload_metadata(str(p), title=None, description=None, tags=None, content_sha256=None)
+    md = build_upload_metadata(
+        str(p), title=None, description=None, tags=None, content_sha256=None
+    )
 
     assert md["name"] == Path(str(p)).name
     props = md.get("appProperties")

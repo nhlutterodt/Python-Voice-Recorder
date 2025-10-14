@@ -1,10 +1,9 @@
-import sys
-import os
 import importlib
+import os
+import sys
 from types import SimpleNamespace
 
 import pytest
-
 from PySide6.QtWidgets import QApplication
 
 
@@ -13,7 +12,7 @@ def test_cli_no_keyring_overrides_config(monkeypatch):
     main window with use_keyring=False even if config_manager.prefers_keyring() is True.
     """
     # Import the module fresh to ensure globals are as expected
-    enhanced_main = importlib.import_module('enhanced_main')
+    enhanced_main = importlib.import_module("enhanced_main")
 
     # Prepare dummy QApplication and EnhancedAudioEditor to avoid real GUI creation
     class DummyApp:
@@ -38,20 +37,20 @@ def test_cli_no_keyring_overrides_config(monkeypatch):
         def __init__(self, *args, **kwargs):
             DummyEditor.last_instance = self
             # Capture the use_keyring kwarg if provided
-            self.use_keyring = kwargs.get('use_keyring', None)
+            self.use_keyring = kwargs.get("use_keyring", None)
 
         def show(self):
             pass
 
     # Monkeypatch QApplication and EnhancedAudioEditor in the module under test
-    monkeypatch.setattr(enhanced_main, 'QApplication', DummyApp)
-    monkeypatch.setattr(enhanced_main, 'EnhancedAudioEditor', DummyEditor)
+    monkeypatch.setattr(enhanced_main, "QApplication", DummyApp)
+    monkeypatch.setattr(enhanced_main, "EnhancedAudioEditor", DummyEditor)
 
     # Ensure config_manager prefers keyring by default
     enhanced_main.config_manager.google_config.use_keyring = True
 
     # Simulate CLI args
-    monkeypatch.setattr(sys, 'argv', ['prog', '--no-keyring'])
+    monkeypatch.setattr(sys, "argv", ["prog", "--no-keyring"])
 
     # Run main and catch SystemExit (expected due to sys.exit in main)
     try:
@@ -68,7 +67,7 @@ def test_cli_no_keyring_with_env_and_dotenv_false(tmp_path, monkeypatch):
     """When .env and environment variable indicate USE_KEYRING=false, passing
     --no-keyring should still result in use_keyring=False (inverse sanity check).
     """
-    enhanced_main = importlib.import_module('enhanced_main')
+    enhanced_main = importlib.import_module("enhanced_main")
 
     class DummyApp:
         def __init__(self, args=None):
@@ -91,22 +90,22 @@ def test_cli_no_keyring_with_env_and_dotenv_false(tmp_path, monkeypatch):
 
         def __init__(self, *args, **kwargs):
             DummyEditor.last_instance = self
-            self.use_keyring = kwargs.get('use_keyring', None)
+            self.use_keyring = kwargs.get("use_keyring", None)
 
         def show(self):
             pass
 
-    monkeypatch.setattr(enhanced_main, 'QApplication', DummyApp)
-    monkeypatch.setattr(enhanced_main, 'EnhancedAudioEditor', DummyEditor)
+    monkeypatch.setattr(enhanced_main, "QApplication", DummyApp)
+    monkeypatch.setattr(enhanced_main, "EnhancedAudioEditor", DummyEditor)
 
-    env_path = tmp_path / '.env'
-    env_path.write_text('USE_KEYRING=false\n', encoding='utf-8')
+    env_path = tmp_path / ".env"
+    env_path.write_text("USE_KEYRING=false\n", encoding="utf-8")
 
-    cfg = importlib.import_module('config_manager').config_manager
-    monkeypatch.setattr(cfg, 'env_file', env_path)
-    monkeypatch.setenv('USE_KEYRING', 'false')
+    cfg = importlib.import_module("config_manager").config_manager
+    monkeypatch.setattr(cfg, "env_file", env_path)
+    monkeypatch.setenv("USE_KEYRING", "false")
 
-    monkeypatch.setattr(sys, 'argv', ['prog', '--no-keyring'])
+    monkeypatch.setattr(sys, "argv", ["prog", "--no-keyring"])
 
     try:
         enhanced_main.main()
@@ -120,7 +119,7 @@ def test_cli_no_keyring_with_env_and_dotenv_false(tmp_path, monkeypatch):
 @pytest.fixture
 def cloud_mocks(monkeypatch):
     """Provide dummy cloud classes and patch them into the enhanced_editor module."""
-    ee = importlib.import_module('enhanced_editor')
+    ee = importlib.import_module("enhanced_editor")
 
     class DummyAuthManager:
         last_instance = None
@@ -147,38 +146,36 @@ def cloud_mocks(monkeypatch):
             self.drive = drive
             self.feature_gate = feature_gate
 
-    monkeypatch.setattr(ee, '_cloud_available', True)
-    monkeypatch.setattr(ee, 'GoogleAuthManager', DummyAuthManager)
-    monkeypatch.setattr(ee, 'GoogleDriveManager', DummyDriveManager)
-    monkeypatch.setattr(ee, 'FeatureGate', DummyFeatureGate)
-    monkeypatch.setattr(ee, 'CloudUI', DummyCloudUI)
+    monkeypatch.setattr(ee, "_cloud_available", True)
+    monkeypatch.setattr(ee, "GoogleAuthManager", DummyAuthManager)
+    monkeypatch.setattr(ee, "GoogleDriveManager", DummyDriveManager)
+    monkeypatch.setattr(ee, "FeatureGate", DummyFeatureGate)
+    monkeypatch.setattr(ee, "CloudUI", DummyCloudUI)
 
-    return {
-        'ee': ee,
-        'DummyAuth': DummyAuthManager,
-        'DummyCloudUI': DummyCloudUI
-    }
+    return {"ee": ee, "DummyAuth": DummyAuthManager, "DummyCloudUI": DummyCloudUI}
 
 
 @pytest.fixture
 def editor_with_cloud(monkeypatch, cloud_mocks, qapp, tmp_path):
     """Create an EnhancedAudioEditor with cloud mocks patched in and a temp .env."""
-    ee = cloud_mocks['ee']
-    cfg = importlib.import_module('config_manager').config_manager
-    monkeypatch.setattr(cfg, 'env_file', tmp_path / '.env')
+    ee = cloud_mocks["ee"]
+    cfg = importlib.import_module("config_manager").config_manager
+    monkeypatch.setattr(cfg, "env_file", tmp_path / ".env")
     # ensure preference starts True
     cfg.google_config.use_keyring = True
     editor = ee.EnhancedAudioEditor(use_keyring=True)
     return editor
 
 
-def test_integration_open_preferences_reinit(monkeypatch, editor_with_cloud, cloud_mocks, tmp_path):
+def test_integration_open_preferences_reinit(
+    monkeypatch, editor_with_cloud, cloud_mocks, tmp_path
+):
     """Integration-style test: open Preferences from the real editor, simulate
     the SettingsDialog saving a new preference, and verify the editor's
     CloudUI was reinitialized with a new auth manager reflecting that change.
     """
-    ee = cloud_mocks['ee']
-    DummyAuth = cloud_mocks['DummyAuth']
+    ee = cloud_mocks["ee"]
+    DummyAuth = cloud_mocks["DummyAuth"]
 
     editor = editor_with_cloud
 
@@ -188,11 +185,11 @@ def test_integration_open_preferences_reinit(monkeypatch, editor_with_cloud, clo
     # CloudUI instance attached to the editor tab should reference that auth
     initial_cloud_ui = editor.cloud_ui
     assert initial_cloud_ui is not None
-    assert getattr(initial_cloud_ui, 'auth', None) is initial_auth
+    assert getattr(initial_cloud_ui, "auth", None) is initial_auth
 
     # Replace SettingsDialog with a fake one whose exec() will flip the setting
     def fake_exec_and_save(parent=None):
-        cfg = importlib.import_module('config_manager').config_manager
+        cfg = importlib.import_module("config_manager").config_manager
         cfg.set_use_keyring(False)
         return True
 
@@ -203,7 +200,7 @@ def test_integration_open_preferences_reinit(monkeypatch, editor_with_cloud, clo
         def exec(self):
             return fake_exec_and_save()
 
-    monkeypatch.setattr(ee, 'SettingsDialog', FakeSettingsDialog)
+    monkeypatch.setattr(ee, "SettingsDialog", FakeSettingsDialog)
 
     # Call the real UI method to open preferences, which should call our fake
     editor.open_preferences()
@@ -213,11 +210,8 @@ def test_integration_open_preferences_reinit(monkeypatch, editor_with_cloud, clo
     assert DummyAuth.last_instance is not initial_auth
     assert DummyAuth.last_instance.use_keyring is False
     # The editor's CloudUI should have been replaced and should reference the new auth
-    assert getattr(editor, 'cloud_ui', None) is not initial_cloud_ui
-    assert getattr(editor.cloud_ui, 'auth', None) is DummyAuth.last_instance
-
-
-
+    assert getattr(editor, "cloud_ui", None) is not initial_cloud_ui
+    assert getattr(editor.cloud_ui, "auth", None) is DummyAuth.last_instance
 
 
 def test_reinit_cloud_components_uses_updated_preference(monkeypatch, tmp_path, qapp):
@@ -225,14 +219,14 @@ def test_reinit_cloud_components_uses_updated_preference(monkeypatch, tmp_path, 
     components, the new GoogleAuthManager is created with the updated use_keyring.
     """
     # Import the module under test
-    ee = importlib.import_module('enhanced_editor')
-    cfg = importlib.import_module('config_manager').config_manager
+    ee = importlib.import_module("enhanced_editor")
+    cfg = importlib.import_module("config_manager").config_manager
 
     # Point config_manager.env_file to temp to avoid touching repo .env
-    monkeypatch.setattr(cfg, 'env_file', tmp_path / '.env')
+    monkeypatch.setattr(cfg, "env_file", tmp_path / ".env")
 
     # Ensure cloud is considered available
-    monkeypatch.setattr(ee, '_cloud_available', True)
+    monkeypatch.setattr(ee, "_cloud_available", True)
 
     # Dummy classes to capture use_keyring
     class DummyAuthManager:
@@ -251,18 +245,19 @@ def test_reinit_cloud_components_uses_updated_preference(monkeypatch, tmp_path, 
             self.auth = auth
 
     class DummyCloudUI:
-            def __init__(self, auth, drive, feature_gate):
-                from PySide6.QtWidgets import QWidget
-                QWidget.__init__(self)
-                self.auth = auth
-                self.drive = drive
-                self.feature_gate = feature_gate
+        def __init__(self, auth, drive, feature_gate):
+            from PySide6.QtWidgets import QWidget
+
+            QWidget.__init__(self)
+            self.auth = auth
+            self.drive = drive
+            self.feature_gate = feature_gate
 
     # Patch the cloud classes in enhanced_editor module
-    monkeypatch.setattr(ee, 'GoogleAuthManager', DummyAuthManager)
-    monkeypatch.setattr(ee, 'GoogleDriveManager', DummyDriveManager)
-    monkeypatch.setattr(ee, 'FeatureGate', DummyFeatureGate)
-    monkeypatch.setattr(ee, 'CloudUI', DummyCloudUI)
+    monkeypatch.setattr(ee, "GoogleAuthManager", DummyAuthManager)
+    monkeypatch.setattr(ee, "GoogleDriveManager", DummyDriveManager)
+    monkeypatch.setattr(ee, "FeatureGate", DummyFeatureGate)
+    monkeypatch.setattr(ee, "CloudUI", DummyCloudUI)
 
     # Start with preference True
     cfg.google_config.use_keyring = True
@@ -283,7 +278,7 @@ def test_reinit_cloud_components_uses_updated_preference(monkeypatch, tmp_path, 
             return True
 
     # Patch the dialog used by EnhancedAudioEditor.open_preferences
-    monkeypatch.setattr(ee, 'SettingsDialog', DummySettingsDialog)
+    monkeypatch.setattr(ee, "SettingsDialog", DummySettingsDialog)
 
     # Call open_preferences which should trigger re-init with the new preference
     editor.open_preferences()
@@ -293,13 +288,13 @@ def test_reinit_cloud_components_uses_updated_preference(monkeypatch, tmp_path, 
     assert DummyAuthManager.last_instance.use_keyring is False
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def qapp():
     """Provide a headless Qt QApplication for widget tests.
 
     Uses the offscreen platform so tests don't require a display.
     """
-    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
@@ -310,12 +305,12 @@ def test_settings_dialog_on_save_updates_env_and_pref(tmp_path, monkeypatch, qap
     """Instantiate the real SettingsDialog in a headless QApplication,
     toggle the checkbox, save, and verify .env and config_manager update.
     """
-    settings_ui = importlib.import_module('settings_ui')
-    config_manager = importlib.import_module('config_manager').config_manager
+    settings_ui = importlib.import_module("settings_ui")
+    config_manager = importlib.import_module("config_manager").config_manager
 
     # Point the config manager's env_file to a temp .env in tmp_path
-    env_path = tmp_path / '.env'
-    monkeypatch.setattr(config_manager, 'env_file', env_path)
+    env_path = tmp_path / ".env"
+    monkeypatch.setattr(config_manager, "env_file", env_path)
 
     # Start with USE_KEYRING True
     config_manager.google_config.use_keyring = True
@@ -334,15 +329,15 @@ def test_settings_dialog_on_save_updates_env_and_pref(tmp_path, monkeypatch, qap
 
     # .env file should exist and contain USE_KEYRING=false
     assert env_path.exists()
-    contents = env_path.read_text(encoding='utf-8')
-    assert 'USE_KEYRING=false' in contents
+    contents = env_path.read_text(encoding="utf-8")
+    assert "USE_KEYRING=false" in contents
 
 
 def test_cli_no_keyring_precedence_over_env_and_dotenv(tmp_path, monkeypatch):
     """Ensure that the CLI --no-keyring flag takes precedence over both the
     environment variable USE_KEYRING and the project's .env file.
     """
-    enhanced_main = importlib.import_module('enhanced_main')
+    enhanced_main = importlib.import_module("enhanced_main")
 
     # Dummy QApplication and EnhancedAudioEditor to capture the passed kwarg
     class DummyApp:
@@ -366,25 +361,25 @@ def test_cli_no_keyring_precedence_over_env_and_dotenv(tmp_path, monkeypatch):
 
         def __init__(self, *args, **kwargs):
             DummyEditor.last_instance = self
-            self.use_keyring = kwargs.get('use_keyring', None)
+            self.use_keyring = kwargs.get("use_keyring", None)
 
         def show(self):
             pass
 
-    monkeypatch.setattr(enhanced_main, 'QApplication', DummyApp)
-    monkeypatch.setattr(enhanced_main, 'EnhancedAudioEditor', DummyEditor)
+    monkeypatch.setattr(enhanced_main, "QApplication", DummyApp)
+    monkeypatch.setattr(enhanced_main, "EnhancedAudioEditor", DummyEditor)
 
     # Create a real .env file containing USE_KEYRING=true
-    env_path = tmp_path / '.env'
-    env_path.write_text('USE_KEYRING=true\n', encoding='utf-8')
+    env_path = tmp_path / ".env"
+    env_path.write_text("USE_KEYRING=true\n", encoding="utf-8")
 
     # Point config_manager.env_file to our temp .env and ensure environment variable is set to true
-    cfg = importlib.import_module('config_manager').config_manager
-    monkeypatch.setattr(cfg, 'env_file', env_path)
-    monkeypatch.setenv('USE_KEYRING', 'true')
+    cfg = importlib.import_module("config_manager").config_manager
+    monkeypatch.setattr(cfg, "env_file", env_path)
+    monkeypatch.setenv("USE_KEYRING", "true")
 
     # Simulate CLI args with --no-keyring
-    monkeypatch.setattr(sys, 'argv', ['prog', '--no-keyring'])
+    monkeypatch.setattr(sys, "argv", ["prog", "--no-keyring"])
 
     try:
         enhanced_main.main()
@@ -419,20 +414,21 @@ def test_auth_manager_does_not_write_keyring_when_disabled(tmp_path, monkeypatch
     mgr = GoogleAuthManager(app_dir=tmp_path, credentials=fake, use_keyring=False)
 
     # Patch keyring.set_password to a spy that would error if called
-    called = {'was_called': False}
+    called = {"was_called": False}
 
     def fake_set_password(service, name, value):
-        called['was_called'] = True
+        called["was_called"] = True
 
     # Inject a fake keyring module into sys.modules so imports inside method hit it
     import sys as _sys
+
     fake_keyring_mod = SimpleNamespace(set_password=fake_set_password)
-    monkeypatch.setitem(_sys.modules, 'keyring', fake_keyring_mod)
+    monkeypatch.setitem(_sys.modules, "keyring", fake_keyring_mod)
 
     # Call the internal save directly
     mgr._save_credentials_securely()
 
-    assert called['was_called'] is False
+    assert called["was_called"] is False
 
 
 def test_auth_manager_calls_keyring_when_enabled(tmp_path, monkeypatch):
@@ -460,14 +456,14 @@ def test_auth_manager_calls_keyring_when_enabled(tmp_path, monkeypatch):
         calls.append((service, name, value))
 
     import sys as _sys
+
     fake_keyring_mod = SimpleNamespace(set_password=spy_set_password)
-    monkeypatch.setitem(_sys.modules, 'keyring', fake_keyring_mod)
+    monkeypatch.setitem(_sys.modules, "keyring", fake_keyring_mod)
 
     mgr._save_credentials_securely()
 
     assert len(calls) == 1
     svc, keyname, val = calls[0]
-    assert svc == 'VoiceRecorderPro'
-    assert 'token.json' in keyname
+    assert svc == "VoiceRecorderPro"
+    assert "token.json" in keyname
     assert val == fake.to_json()
-

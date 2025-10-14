@@ -1,10 +1,10 @@
 import os
-import wave
-import time
 import threading
-import numpy as np
+import time
+import wave
 from unittest.mock import patch
 
+import numpy as np
 from audio_recorder import AudioRecorderThread
 
 
@@ -24,6 +24,7 @@ def test_streaming_recording_writes_file(tmp_path):
 
         def __enter__(self):
             self._running = True
+
             # Start a thread to simulate audio callbacks
             def run_cb():
                 for i in range(3):
@@ -34,6 +35,7 @@ def test_streaming_recording_writes_file(tmp_path):
                     # callback signature: indata, frames, time, status
                     self.callback(chunk.reshape(-1, 1), frames, None, None)
                     time.sleep(0.01)
+
             self._thread = threading.Thread(target=run_cb)
             self._thread.start()
             return self
@@ -43,8 +45,10 @@ def test_streaming_recording_writes_file(tmp_path):
             self._thread.join()
 
     # Patch sounddevice.InputStream to return our FakeInputStream
-    with patch('audio_recorder.sd.InputStream', new=FakeInputStream):
-        thread = AudioRecorderThread(str(out), sample_rate=sample_rate, channels=channels)
+    with patch("audio_recorder.sd.InputStream", new=FakeInputStream):
+        thread = AudioRecorderThread(
+            str(out), sample_rate=sample_rate, channels=channels
+        )
         # Run the QThread.run method directly (no Qt event loop) for the test
         thread.is_recording = True
         # Run in a separate thread to mimic start/stop
@@ -60,7 +64,7 @@ def test_streaming_recording_writes_file(tmp_path):
 
     # Validate output file exists and has expected properties
     assert os.path.exists(str(out))
-    with wave.open(str(out), 'rb') as wf:
+    with wave.open(str(out), "rb") as wf:
         assert wf.getnchannels() == channels
         assert wf.getframerate() == sample_rate
         # At least some frames were written

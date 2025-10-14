@@ -1,13 +1,17 @@
+import logging
 import os
 import tempfile
-import logging
-import pytest
 from typing import Any
 
+import pytest
 
-def test_drive_manager_behaviour_when_google_apis_unavailable(monkeypatch: Any, caplog: Any):
+
+def test_drive_manager_behaviour_when_google_apis_unavailable(
+    monkeypatch: Any, caplog: Any
+):
     # Import module and force-disable Google APIs
     import cloud.drive_manager as dm
+
     monkeypatch.setattr(dm, "GOOGLE_APIS_AVAILABLE", False, raising=True)
 
     class StubAuth:
@@ -21,6 +25,7 @@ def test_drive_manager_behaviour_when_google_apis_unavailable(monkeypatch: Any, 
 
     # _get_service should raise a predictable error
     from cloud.exceptions import APILibrariesMissingError
+
     with pytest.raises(APILibrariesMissingError):
         mgr._get_service()  # type: ignore[attr-defined]  # accessing protected for test coverage
 
@@ -33,14 +38,16 @@ def test_drive_manager_behaviour_when_google_apis_unavailable(monkeypatch: Any, 
     assert mgr.get_storage_info() == {}
 
     # download/delete -> False
-    assert mgr.download_recording("fake_id", os.path.join(os.getcwd(), "out.dat")) is False
+    assert (
+        mgr.download_recording("fake_id", os.path.join(os.getcwd(), "out.dat")) is False
+    )
     assert mgr.delete_recording("fake_id") is False
 
     # upload_recording -> None, use a real temp file so it passes the exists() check
     fd, path = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     try:
-        uploader = getattr(mgr, 'get_uploader', None)
+        uploader = getattr(mgr, "get_uploader", None)
         if callable(uploader):
             # New uploader should raise APILibrariesMissingError when libs disabled
             with pytest.raises(APILibrariesMissingError):

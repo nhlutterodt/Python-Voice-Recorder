@@ -1,5 +1,10 @@
 # 🎤 Voice Recorder Pro v2.0.0-beta
 
+[![CI](https://github.com/nhlutterodt/Python-Voice-Recorder/workflows/CI/badge.svg?branch=feature/backend-robustness)](https://github.com/nhlutterodt/Python-Voice-Recorder/actions/workflows/ci.yml)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Imports: isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
+[![Linting: ruff](https://img.shields.io/badge/linting-ruff-red)](https://github.com/astral-sh/ruff)
+
 *A professional audio recording application with advanced editing and cloud integration*
 
 **Created by Neils Haldane-Lutterodt with GitHub Copilot assistance**

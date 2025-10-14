@@ -1,6 +1,6 @@
 import threading
-import pytest
 
+import pytest
 from cloud.upload_utils import chunked_upload_with_progress
 
 
@@ -23,7 +23,7 @@ class FakeRequest:
 
     def next_chunk(self):
         if self._i >= len(self._chunks):
-            return (None, {'id': 'fileid'})
+            return (None, {"id": "fileid"})
         val = self._chunks[self._i]
         self._i += 1
         return val
@@ -36,13 +36,15 @@ def test_chunked_upload_success_reports_progress():
         calls.append((uploaded, total))
 
     status = FakeStatus([0.1, 0.5, 1.0])
-    req = FakeRequest([(status, None), (status, None), (status, {'id': 'ok'})])
+    req = FakeRequest([(status, None), (status, None), (status, {"id": "ok"})])
 
     def create_req():
         return req
 
-    resp = chunked_upload_with_progress(create_req, progress_callback=progress_cb, max_retries=1)
-    assert resp == {'id': 'ok'}
+    resp = chunked_upload_with_progress(
+        create_req, progress_callback=progress_cb, max_retries=1
+    )
+    assert resp == {"id": "ok"}
     assert len(calls) >= 1
 
 
@@ -65,14 +67,19 @@ def test_chunked_upload_cancel_raises():
     cancel.set()
 
     with pytest.raises(RuntimeError):
-        chunked_upload_with_progress(create_req, progress_callback=progress_cb, cancel_check=cancel_check, max_retries=1)
+        chunked_upload_with_progress(
+            create_req,
+            progress_callback=progress_cb,
+            cancel_check=cancel_check,
+            max_retries=1,
+        )
 
 
 def test_chunked_upload_retries_on_exception(monkeypatch):
-    calls = {'attempts': 0}
+    calls = {"attempts": 0}
 
     def create_req():
-        calls['attempts'] += 1
+        calls["attempts"] += 1
 
         class BadReq:
             def next_chunk(self):
@@ -82,7 +89,7 @@ def test_chunked_upload_retries_on_exception(monkeypatch):
 
     with pytest.raises(IOError):
         chunked_upload_with_progress(create_req, max_retries=2, retry_backoff=0)
-    assert calls['attempts'] >= 2
+    assert calls["attempts"] >= 2
 
 
 def test_chunked_upload_transient_http_retries_and_reinitiates():
@@ -91,24 +98,24 @@ def test_chunked_upload_transient_http_retries_and_reinitiates():
     The create_request factory should be called again after a transient failure and the
     helper should return the successful response within max_retries.
     """
-    attempts = {'count': 0}
+    attempts = {"count": 0}
 
     status = FakeStatus([0.5])
 
     def create_req():
-        attempts['count'] += 1
+        attempts["count"] += 1
 
-        if attempts['count'] == 1:
+        if attempts["count"] == 1:
             # first request fails with a transient server error
             class BadReq:
                 def next_chunk(self):
-                    raise Exception('503 Service Unavailable')
+                    raise Exception("503 Service Unavailable")
 
             return BadReq()
 
         # subsequent attempts return a working request that completes
-        return FakeRequest([(status, None), (status, {'id': 'ok'})])
+        return FakeRequest([(status, None), (status, {"id": "ok"})])
 
     resp = chunked_upload_with_progress(create_req, max_retries=3, retry_backoff=0)
-    assert resp == {'id': 'ok'}
-    assert attempts['count'] >= 2
+    assert resp == {"id": "ok"}
+    assert attempts["count"] >= 2

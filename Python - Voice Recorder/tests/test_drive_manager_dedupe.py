@@ -1,5 +1,3 @@
-
-
 from cloud.drive_manager import GoogleDriveManager
 
 
@@ -23,7 +21,9 @@ def test_upload_recording_returns_existing_file_id_on_duplicate(monkeypatch, tmp
         assert content_sha256 == "deadbeef"
         return {"id": "dup-123", "name": "existing.wav"}
 
-    monkeypatch.setattr(GoogleDriveManager, "find_duplicate_by_content_sha256", fake_find_duplicate)
+    monkeypatch.setattr(
+        GoogleDriveManager, "find_duplicate_by_content_sha256", fake_find_duplicate
+    )
 
     mgr = GoogleDriveManager(FakeAuth())
 

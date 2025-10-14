@@ -1,4 +1,3 @@
-
 from cloud.google_uploader import GoogleDriveUploader
 from cloud.metadata_schema import build_upload_metadata
 
@@ -10,7 +9,15 @@ class DummyRequest:
 
     def next_chunk(self):
         # emulate immediate completion
-        return (None, {"id": "fake-id", "name": self._body.get("name"), "size": 123, "createdTime": "now"})
+        return (
+            None,
+            {
+                "id": "fake-id",
+                "name": self._body.get("name"),
+                "size": 123,
+                "createdTime": "now",
+            },
+        )
 
 
 class FakeMedia:
@@ -61,17 +68,33 @@ def test_google_uploader_passes_metadata(tmp_path):
 
     # call upload and capture the body used by the fake service
     # stub compute_content_sha256 so the uploader includes it
-    import cloud.dedupe as dedupe
     from unittest.mock import patch
 
-    with patch.object(dedupe, 'compute_content_sha256', return_value='deadbeef'):
-        res = uploader.upload(str(p), title="T", description="D", tags=["x"], progress_callback=None, cancel_event=None, force=True)
+    with patch(
+        "voice_recorder.cloud.dedupe.compute_content_sha256", return_value="deadbeef"
+    ):
+        res = uploader.upload(
+            str(p),
+            title="T",
+            description="D",
+            tags=["x"],
+            progress_callback=None,
+            cancel_event=None,
+            force=True,
+        )
 
     # verify result
     assert res["file_id"] == "fake-id"
 
     # ensure the fake service has recorded the body matching build_upload_metadata
-    expected = build_upload_metadata(str(p), title="T", description="D", tags=["x"], content_sha256=None, folder_id="fld-1")
+    expected = build_upload_metadata(
+        str(p),
+        title="T",
+        description="D",
+        tags=["x"],
+        content_sha256=None,
+        folder_id="fld-1",
+    )
 
     # Compare appProperties keys present in expected
     recorded = mgr._service._files.last_body
@@ -82,4 +105,4 @@ def test_google_uploader_passes_metadata(tmp_path):
     for k in expected.get("appProperties", {}):
         assert k in recorded.get("appProperties")
     # Verify content_sha256 was included by the uploader under appProperties
-    assert recorded.get("appProperties").get('content_sha256') == 'deadbeef'
+    assert recorded.get("appProperties").get("content_sha256") == "deadbeef"

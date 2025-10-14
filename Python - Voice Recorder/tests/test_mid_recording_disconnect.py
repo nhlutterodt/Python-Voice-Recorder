@@ -1,8 +1,9 @@
 import os
-import time
 import threading
-import numpy as np
+import time
 from unittest.mock import patch
+
+import numpy as np
 from audio_recorder import AudioRecorderThread
 
 
@@ -16,10 +17,12 @@ def test_inputstream_raises_on_open(tmp_path, caplog):
             # Simulate device disappearing when attempting to open stream
             raise RuntimeError("Device disappeared on open")
 
-    with patch('audio_recorder.sd.InputStream', new=RaisingInputStream):
-        thread = AudioRecorderThread(str(out), sample_rate=sample_rate, channels=channels)
+    with patch("audio_recorder.sd.InputStream", new=RaisingInputStream):
+        thread = AudioRecorderThread(
+            str(out), sample_rate=sample_rate, channels=channels
+        )
         caplog.clear()
-        caplog.set_level('ERROR')
+        caplog.set_level("ERROR")
 
         thread.is_recording = True
         t = threading.Thread(target=thread.run)
@@ -29,7 +32,7 @@ def test_inputstream_raises_on_open(tmp_path, caplog):
     # No file should exist
     assert not os.path.exists(str(out))
     # The recorder logs an ERROR when the device disappears during open
-    assert any('Recording failed' in r.message for r in caplog.records)
+    assert any("Recording failed" in r.message for r in caplog.records)
 
 
 def test_inputstream_raises_on_exit_cleanup(tmp_path, caplog):
@@ -40,8 +43,12 @@ def test_inputstream_raises_on_exit_cleanup(tmp_path, caplog):
     class ExitRaisingInputStream:
         def __init__(self, *args, **kwargs):
             # Accept flexible constructor signature like sd.InputStream
-            self.callback = kwargs.get('callback') if 'callback' in kwargs else (args[0] if args else None)
-            self.blocksize = kwargs.get('blocksize', 1024)
+            self.callback = (
+                kwargs.get("callback")
+                if "callback" in kwargs
+                else (args[0] if args else None)
+            )
+            self.blocksize = kwargs.get("blocksize", 1024)
             self._running = False
 
         def __enter__(self):
@@ -70,10 +77,12 @@ def test_inputstream_raises_on_exit_cleanup(tmp_path, caplog):
             # Simulate device failure during context exit
             raise RuntimeError("Device disconnected during recording")
 
-    with patch('audio_recorder.sd.InputStream', new=ExitRaisingInputStream):
-        thread = AudioRecorderThread(str(out), sample_rate=sample_rate, channels=channels)
+    with patch("audio_recorder.sd.InputStream", new=ExitRaisingInputStream):
+        thread = AudioRecorderThread(
+            str(out), sample_rate=sample_rate, channels=channels
+        )
         caplog.clear()
-        caplog.set_level('ERROR')
+        caplog.set_level("ERROR")
 
         thread.is_recording = True
         t = threading.Thread(target=thread.run)
@@ -88,7 +97,7 @@ def test_inputstream_raises_on_exit_cleanup(tmp_path, caplog):
     # Final file should not exist because finalize failed and cleanup removed partial
     assert not os.path.exists(str(out))
     # The recorder logs an ERROR when the InputStream fails on exit
-    assert any('Recording failed' in r.message for r in caplog.records)
+    assert any("Recording failed" in r.message for r in caplog.records)
 
 
 def test_callback_write_error_removes_part(tmp_path, caplog):
@@ -123,8 +132,12 @@ def test_callback_write_error_removes_part(tmp_path, caplog):
     # Fake InputStream that will call the provided callback a few times
     class SingleCallbackInputStream:
         def __init__(self, *args, **kwargs):
-            self.callback = kwargs.get('callback') if 'callback' in kwargs else (args[0] if args else None)
-            self.blocksize = kwargs.get('blocksize', 1024)
+            self.callback = (
+                kwargs.get("callback")
+                if "callback" in kwargs
+                else (args[0] if args else None)
+            )
+            self.blocksize = kwargs.get("blocksize", 1024)
             self._running = False
 
         def __enter__(self):
@@ -146,11 +159,13 @@ def test_callback_write_error_removes_part(tmp_path, caplog):
     # Patch both wave.open and sd.InputStream inside the audio_recorder module
     from unittest.mock import patch
 
-    with patch('audio_recorder.wave.open', new=lambda path, mode: FakeWave(path, mode)):
-        with patch('audio_recorder.sd.InputStream', new=SingleCallbackInputStream):
-            thread = AudioRecorderThread(str(out), sample_rate=sample_rate, channels=channels)
+    with patch("audio_recorder.wave.open", new=lambda path, mode: FakeWave(path, mode)):
+        with patch("audio_recorder.sd.InputStream", new=SingleCallbackInputStream):
+            thread = AudioRecorderThread(
+                str(out), sample_rate=sample_rate, channels=channels
+            )
             caplog.clear()
-            caplog.set_level('ERROR')
+            caplog.set_level("ERROR")
 
             thread.is_recording = True
             t = threading.Thread(target=thread.run)
@@ -160,17 +175,19 @@ def test_callback_write_error_removes_part(tmp_path, caplog):
             t.join(timeout=2)
 
     # Ensure .part and final files do not exist
-    assert not os.path.exists(str(out)), \
-        "Final output should not exist after callback write failure"
-    assert not os.path.exists(str(out) + '.part'), \
-        ".part temporary file should be removed after callback write failure"
+    assert not os.path.exists(
+        str(out)
+    ), "Final output should not exist after callback write failure"
+    assert not os.path.exists(
+        str(out) + ".part"
+    ), ".part temporary file should be removed after callback write failure"
 
     # The recorder logs an ERROR when the callback write fails. The recorder
     # may either log the exception message from the callback or emit a
     # recording_error signal; accept either.
     assert any(
-        'Recording callback error' in r.message
-        or 'Recording failed' in r.message
-        or 'Error in audio callback' in r.message
+        "Recording callback error" in r.message
+        or "Recording failed" in r.message
+        or "Error in audio callback" in r.message
         for r in caplog.records
     )

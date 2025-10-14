@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 
-
 # Ensure the project package folder (the 'Python - Voice Recorder' folder) is on sys.path
 # so tests that import top-level modules like `services.*` can resolve them during collection.
 tests_dir = Path(__file__).resolve().parent
@@ -16,14 +15,14 @@ This intentionally minimal file avoids heavy runtime imports to permit
 static analysis and linters to run across the test suite.
 """
 
-from pathlib import Path
-from typing import Generator
+from pathlib import Path  # noqa: E402
+from typing import Generator  # noqa: E402
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+import pytest  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
 
-from voice_recorder.models import database as app_db_mod
+from voice_recorder.models import database as app_db_mod  # noqa: E402
 
 
 @pytest.fixture()
@@ -54,3 +53,11 @@ def tmp_db_context(tmp_sqlite_engine) -> Generator[object, None, None]:
         app_db_mod.Base.metadata.drop_all(bind=tmp_sqlite_engine)
     except Exception:
         pass
+
+
+@pytest.fixture()
+def recordings_dir(tmp_path: Path) -> Path:
+    """Provide a temporary recordings directory for tests."""
+    rec_dir = tmp_path / "recordings_test"
+    rec_dir.mkdir(parents=True, exist_ok=True)
+    return rec_dir

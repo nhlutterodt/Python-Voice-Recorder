@@ -1,4 +1,5 @@
-from typing import Any, Dict, Optional, List, cast
+from typing import Any, Dict, List, Optional, cast
+
 import pytest
 
 
@@ -102,12 +103,18 @@ def test_get_all_features_and_types():
     assert all(isinstance(x, str) for x in free_formats_any)
 
 
-@pytest.mark.parametrize("auth_manager,expected_tier,cloud_upload,formats,storage_limit", [
-    (StubAuthManagerUnauth(), "free", False, ["wav"], 0),
-    (StubAuthManagerAuth(), "premium", True, ["wav", "mp3", "flac"], 15),
-])
-def test_tier_matrix_parameterized(auth_manager, expected_tier, cloud_upload, formats, storage_limit):
+@pytest.mark.parametrize(
+    "auth_manager,expected_tier,cloud_upload,formats,storage_limit",
+    [
+        (StubAuthManagerUnauth(), "free", False, ["wav"], 0),
+        (StubAuthManagerAuth(), "premium", True, ["wav", "mp3", "flac"], 15),
+    ],
+)
+def test_tier_matrix_parameterized(
+    auth_manager, expected_tier, cloud_upload, formats, storage_limit
+):
     from cloud.feature_gate import FeatureGate
+
     gate = FeatureGate(auth_manager)
     assert gate.get_user_tier().value == expected_tier
     assert gate.is_feature_enabled("cloud_upload") is cloud_upload
@@ -117,6 +124,7 @@ def test_tier_matrix_parameterized(auth_manager, expected_tier, cloud_upload, fo
 
 def test_unknown_feature_name_returns_safe_defaults():
     from cloud.feature_gate import FeatureGate
+
     gate = FeatureGate(StubAuthManagerUnauth())
     # Unknown feature returns False for is_feature_enabled
     assert gate.is_feature_enabled("nonexistent_feature") is False
@@ -129,11 +137,14 @@ def test_unknown_feature_name_returns_safe_defaults():
 
 def test_tier_status_text_fallback_to_email():
     from cloud.feature_gate import FeatureGate
+
     class EmailOnlyAuth:
         def is_authenticated(self) -> bool:
             return True
+
         def get_user_info(self) -> Optional[Dict[str, Any]]:
             return {"emailAddress": "user@example.com"}
+
     gate = FeatureGate(EmailOnlyAuth())
     text = gate.get_tier_status_text()
     assert "Premium" in text and "user@example.com" in text
@@ -141,11 +152,14 @@ def test_tier_status_text_fallback_to_email():
 
 def test_tier_status_text_fallback_to_user():
     from cloud.feature_gate import FeatureGate
+
     class NoInfoAuth:
         def is_authenticated(self) -> bool:
             return True
+
         def get_user_info(self) -> Optional[Dict[str, Any]]:
             return None
+
     gate = FeatureGate(NoInfoAuth())
     text = gate.get_tier_status_text()
     assert "Premium Account" in text

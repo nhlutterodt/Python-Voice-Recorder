@@ -1,10 +1,10 @@
+import asyncio
 import threading
 import time
 from pathlib import Path
 from unittest.mock import Mock
 
 from cloud.auth_manager import GoogleAuthManager
-import asyncio
 
 
 def test_concurrent_refresh_only_calls_refresh_once(tmp_path: Path) -> None:
@@ -34,7 +34,9 @@ def test_concurrent_refresh_only_calls_refresh_once(tmp_path: Path) -> None:
 
     # Assert: refresh was called at least once but only a single active refresh should have happened
     # Depending on timing, some threads may skip because lock is held. We expect exactly 1 call.
-    assert mock_creds.refresh.call_count == 1, f"refresh called {mock_creds.refresh.call_count} times"
+    assert (
+        mock_creds.refresh.call_count == 1
+    ), f"refresh called {mock_creds.refresh.call_count} times"
 
 
 def test_failed_refresh_propagates_and_allows_retry(tmp_path: Path) -> None:
@@ -77,7 +79,9 @@ def test_failed_refresh_propagates_and_allows_retry(tmp_path: Path) -> None:
         t.join()
 
     # At least one worker should have seen the exception (leader); others waited and then returned
-    assert any(not ok for ok, _ in results), "At least one worker should have observed the refresh failure"
+    assert any(
+        not ok for ok, _ in results
+    ), "At least one worker should have observed the refresh failure"
 
     # Now mark credentials expired again and ensure a subsequent retry succeeds
     mock_creds.expired = True

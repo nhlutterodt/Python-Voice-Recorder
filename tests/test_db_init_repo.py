@@ -2,8 +2,10 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
+import pytest
 
 
+@pytest.mark.integration
 def test_init_db_creates_tables(tmp_path, monkeypatch):
     # Create a temp sqlite db path
     db_file = tmp_path / "test_app.db"

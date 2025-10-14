@@ -18,20 +18,20 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import threading
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional
 
-
-DEFAULT_DB = ':memory:'
-DEFAULT_FILE_QUEUE = Path.home() / '.vrp_upload_queue.json'
+DEFAULT_DB = ":memory:"
+DEFAULT_FILE_QUEUE = Path.home() / ".vrp_upload_queue.json"
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
+    return (
+        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )
 
 
 @dataclass
@@ -56,7 +56,9 @@ class SqliteJobQueue:
         self._ensure_schema()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=10, check_same_thread=False, isolation_level=None)
+        conn = sqlite3.connect(
+            self.db_path, timeout=10, check_same_thread=False, isolation_level=None
+        )
         conn.row_factory = sqlite3.Row
         # pragmas for durability and concurrency
         conn.execute("PRAGMA journal_mode=WAL;")
@@ -83,9 +85,13 @@ class SqliteJobQueue:
                 );
                 """
             )
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at);")
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at);"
+            )
 
-    def enqueue(self, job_type: str, payload: Dict[str, Any], max_retries: int = 3) -> int:
+    def enqueue(
+        self, job_type: str, payload: Dict[str, Any], max_retries: int = 3
+    ) -> int:
         now = _utc_now_iso()
         payload_txt = json.dumps(payload, ensure_ascii=False)
         with self._connect() as conn:
@@ -98,7 +104,7 @@ class SqliteJobQueue:
             lid = cur.lastrowid
             cur.execute("COMMIT;")
         if lid is None:
-            raise RuntimeError('failed to insert job')
+            raise RuntimeError("failed to insert job")
         return int(lid)
 
     def get_job(self, job_id: int) -> Optional[JobRecord]:
@@ -175,9 +181,14 @@ class SqliteJobQueue:
         now = _utc_now_iso()
         with self._connect() as conn:
             cur = conn.cursor()
-            cur.execute(f"UPDATE jobs SET {set_cols}, updated_at = ? WHERE id = ?", (*params, now, job_id))
+            cur.execute(
+                f"UPDATE jobs SET {set_cols}, updated_at = ? WHERE id = ?",
+                (*params, now, job_id),
+            )
 
-    def process_once(self, handlers: Dict[str, Callable[[Dict[str, Any]], bool]]) -> Optional[int]:
+    def process_once(
+        self, handlers: Dict[str, Callable[[Dict[str, Any]], bool]]
+    ) -> Optional[int]:
         job = self._claim_next_pending()
         if job is None:
             return None
@@ -185,25 +196,41 @@ class SqliteJobQueue:
         handler = handlers.get(job.job_type)
         if handler is None:
             # No handler: mark failed without incrementing attempts
-            self._update_job(job.id, last_error=f"no handler for {job.job_type}", status='failed')
+            self._update_job(
+                job.id, last_error=f"no handler for {job.job_type}", status="failed"
+            )
             return job.id
 
         try:
             ok = handler(job.payload)
             if ok:
-                self._update_job(job.id, status='completed')
+                self._update_job(job.id, status="completed")
             else:
                 attempts = job.attempts + 1
                 if attempts > job.max_retries:
-                    self._update_job(job.id, attempts=attempts, last_error='handler returned false', status='failed')
+                    self._update_job(
+                        job.id,
+                        attempts=attempts,
+                        last_error="handler returned false",
+                        status="failed",
+                    )
                 else:
-                    self._update_job(job.id, attempts=attempts, last_error='handler returned false', status='pending')
+                    self._update_job(
+                        job.id,
+                        attempts=attempts,
+                        last_error="handler returned false",
+                        status="pending",
+                    )
         except Exception as e:
             attempts = job.attempts + 1
             if attempts > job.max_retries:
-                self._update_job(job.id, attempts=attempts, last_error=str(e), status='failed')
+                self._update_job(
+                    job.id, attempts=attempts, last_error=str(e), status="failed"
+                )
             else:
-                self._update_job(job.id, attempts=attempts, last_error=str(e), status='pending')
+                self._update_job(
+                    job.id, attempts=attempts, last_error=str(e), status="pending"
+                )
 
         return job.id
 
@@ -213,12 +240,12 @@ class _FileJobRow:
     id: int
     job_type: str
     payload: Dict[str, Any]
-    status: str = 'pending'
+    status: str = "pending"
     attempts: int = 0
     max_retries: int = 3
     last_error: Optional[str] = None
-    created_at: str = ''
-    updated_at: str = ''
+    created_at: str = ""
+    updated_at: str = ""
 
 
 class FileJobQueue:
@@ -234,7 +261,7 @@ class FileJobQueue:
         if not self.path.exists():
             return
         try:
-            raw = json.loads(self.path.read_text(encoding='utf-8'))
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
             mapped: List[_FileJobRow] = []
             for item in raw:
                 mapped.append(_FileJobRow(**item))
@@ -244,13 +271,24 @@ class FileJobQueue:
 
     def _persist(self) -> None:
         data = [asdict(j) for j in self._jobs]
-        self.path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+        self.path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
-    def enqueue(self, job_type: str, payload: Dict[str, Any], max_retries: int = 3) -> int:
+    def enqueue(
+        self, job_type: str, payload: Dict[str, Any], max_retries: int = 3
+    ) -> int:
         with self._lock:
             new_id = (self._jobs[-1].id + 1) if self._jobs else 1
             now = _utc_now_iso()
-            row = _FileJobRow(id=new_id, job_type=job_type, payload=payload, max_retries=max_retries, created_at=now, updated_at=now)
+            row = _FileJobRow(
+                id=new_id,
+                job_type=job_type,
+                payload=payload,
+                max_retries=max_retries,
+                created_at=now,
+                updated_at=now,
+            )
             self._jobs.append(row)
             self._persist()
             return new_id
@@ -272,20 +310,22 @@ class FileJobQueue:
                 updated_at=row.updated_at,
             )
 
-    def process_once(self, handlers: Dict[str, Callable[[Dict[str, Any]], bool]]) -> Optional[int]:
+    def process_once(
+        self, handlers: Dict[str, Callable[[Dict[str, Any]], bool]]
+    ) -> Optional[int]:
         with self._lock:
-            row = next((j for j in self._jobs if j.status == 'pending'), None)
+            row = next((j for j in self._jobs if j.status == "pending"), None)
             if not row:
                 return None
-            row.status = 'running'
+            row.status = "running"
             row.updated_at = _utc_now_iso()
             self._persist()
 
         handler = handlers.get(row.job_type)
         if handler is None:
             with self._lock:
-                row.last_error = f'no handler for {row.job_type}'
-                row.status = 'failed'
+                row.last_error = f"no handler for {row.job_type}"
+                row.status = "failed"
                 self._persist()
             return row.id
 
@@ -293,25 +333,31 @@ class FileJobQueue:
             ok = handler(row.payload)
             with self._lock:
                 if ok:
-                    row.status = 'completed'
+                    row.status = "completed"
                 else:
                     row.attempts += 1
-                    row.status = 'failed' if row.attempts >= row.max_retries else 'pending'
+                    row.status = (
+                        "failed" if row.attempts >= row.max_retries else "pending"
+                    )
                 row.updated_at = _utc_now_iso()
                 self._persist()
         except Exception as e:
             with self._lock:
                 row.attempts += 1
                 row.last_error = str(e)
-                row.status = 'failed' if row.attempts >= row.max_retries else 'pending'
+                row.status = "failed" if row.attempts >= row.max_retries else "pending"
                 row.updated_at = _utc_now_iso()
                 self._persist()
         return row.id
 
 
-def create_job_queue(db_path: Optional[str] = None, backend: Optional[str] = None, file_queue_path: Optional[Path] = None):
+def create_job_queue(
+    db_path: Optional[str] = None,
+    backend: Optional[str] = None,
+    file_queue_path: Optional[Path] = None,
+):
     """Factory for job queues. backend can be 'sqlite' (default) or 'file'."""
-    if backend == 'file':
+    if backend == "file":
         return FileJobQueue(path=file_queue_path)
     # default to sqlite
     return SqliteJobQueue(db_path=db_path)
@@ -325,16 +371,16 @@ def migrate_file_queue_to_sqlite(file_path: Optional[Path], sqlite_db: str) -> i
     path = Path(file_path) if file_path else DEFAULT_FILE_QUEUE
     if not path.exists():
         return 0
-    with path.open('r', encoding='utf-8') as f:
+    with path.open("r", encoding="utf-8") as f:
         raw = json.load(f)
 
     q = SqliteJobQueue(db_path=sqlite_db)
     migrated = 0
     for item in raw:
         try:
-            job_type = item.get('job_type')
-            payload = item.get('payload') or {}
-            max_retries = item.get('max_retries') or 3
+            job_type = item.get("job_type")
+            payload = item.get("payload") or {}
+            max_retries = item.get("max_retries") or 3
             q.enqueue(job_type, payload, max_retries=max_retries)
             migrated += 1
         except Exception:
@@ -344,4 +390,3 @@ def migrate_file_queue_to_sqlite(file_path: Optional[Path], sqlite_db: str) -> i
 
 # Backwards-compatible alias expected by tests/imports
 JobQueue = SqliteJobQueue
-

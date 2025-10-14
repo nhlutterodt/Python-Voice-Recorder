@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 from cloud.auth_manager import GoogleAuthManager
 
@@ -7,7 +7,7 @@ from cloud.auth_manager import GoogleAuthManager
 def test_save_credentials_uses_keyring_when_available(tmp_path: Path):
     mock_creds = Mock()
     mock_creds.to_json.return_value = '{"token":"abc"}'
-    mgr = GoogleAuthManager(app_dir=tmp_path, credentials=mock_creds)
+    mgr = GoogleAuthManager(app_dir=tmp_path, credentials=mock_creds, use_keyring=True)
 
     fake_keyring = Mock()
 

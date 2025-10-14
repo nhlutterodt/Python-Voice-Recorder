@@ -56,13 +56,15 @@ def _calc_backoff(base: float, attempt: int, *, max_backoff: float = 30.0) -> fl
     return min(exp + jitter, max_backoff)
 
 
-def _discover_total_bytes(status: Optional[_StatusLike], req: _RequestLike) -> Optional[int]:
+def _discover_total_bytes(
+    status: Optional[_StatusLike], req: _RequestLike
+) -> Optional[int]:
     """Try to discover the total upload size from status or request.
 
     Returns an int number of bytes or None if not discoverable.
     """
     try:
-        maybe = (getattr(status, "total_size", None) if status is not None else None)
+        maybe = getattr(status, "total_size", None) if status is not None else None
         if maybe is None:
             maybe = getattr(req, "total_size", None)
         return int(maybe) if maybe not in (None, 0) else None
@@ -125,7 +127,11 @@ def _check_and_handle_cancel(cancel_check: Optional[Callable[[], bool]]):
         raise RuntimeError("upload_cancelled")
 
 
-def _handle_progress(status: _StatusLike, total_bytes: Optional[int], progress_callback: Callable[[int, Optional[int]], None]):
+def _handle_progress(
+    status: _StatusLike,
+    total_bytes: Optional[int],
+    progress_callback: Callable[[int, Optional[int]], None],
+):
     """Normalize status and call the progress callback, swallowing callback errors."""
     uploaded = _normalize_progress(status, total_bytes)
     try:
@@ -181,7 +187,9 @@ def chunked_upload_with_progress(
         try:
             req = create_request()
             # Delegate the per-request loop to a helper for clarity.
-            response = _single_request_upload(req, progress_callback=progress_callback, cancel_check=cancel_check)
+            response = _single_request_upload(
+                req, progress_callback=progress_callback, cancel_check=cancel_check
+            )
             return response
 
         except KeyboardInterrupt:
@@ -197,6 +205,9 @@ def chunked_upload_with_progress(
             backoff = _calc_backoff(retry_backoff, attempt)
             logger.debug(
                 "Transient upload error, retrying in %.2fs (attempt %d/%d): %s",
-                backoff, attempt, max_retries, e,
+                backoff,
+                attempt,
+                max_retries,
+                e,
             )
             time.sleep(backoff)

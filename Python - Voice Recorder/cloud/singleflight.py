@@ -3,10 +3,11 @@
 This is intentionally small and dependency-free so desktop apps can await a single
 in-flight refresh without writing complex coordination code.
 """
+
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable, Optional, Coroutine
+from typing import Any, Callable, Coroutine, Optional
 
 
 class AsyncSingleflight:

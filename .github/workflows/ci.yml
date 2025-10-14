@@ -45,11 +45,35 @@ jobs:
       - name: Run mypy (type checks)
         run: python -m mypy "Python - Voice Recorder/src" --ignore-missing-imports || true
 
-      - name: Run canonical-import check
-        run: python tools/check_imports.py "Python - Voice Recorder/src"
+      - name: Check for legacy imports
+        run: python tools/check_imports.py "Python - Voice Recorder"
 
-      - name: Run ruff (lint)
-        run: python -m ruff check "Python - Voice Recorder/src" "Python - Voice Recorder/tests"
+      - name: Run ruff (linting)
+        run: python -m ruff check "Python - Voice Recorder/src" "Python - Voice Recorder/tests" "Python - Voice Recorder/cloud"
 
-      - name: Run tests
-        run: python -m pytest -q "Python - Voice Recorder/tests"
+      - name: Run black (formatting check)
+        run: python -m black --check "Python - Voice Recorder/src" "Python - Voice Recorder/tests" "Python - Voice Recorder/cloud"
+
+      - name: Run isort (import sorting check)
+        run: python -m isort --check-only "Python - Voice Recorder/src" "Python - Voice Recorder/tests" "Python - Voice Recorder/cloud"
+
+      - name: Run tests (unit tests only)
+        run: |
+          cd "Python - Voice Recorder"
+          python -m pytest -m "not integration" --tb=short --junitxml=../junit-report.xml --cov=src --cov=cloud --cov-report=xml:../coverage.xml --cov-report=term-missing
+        env:
+          PYTHONPATH: ${{ github.workspace }}/Python-Voice-Recorder:${{ github.workspace }}/Python - Voice Recorder
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: junit-report.xml
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: coverage.xml

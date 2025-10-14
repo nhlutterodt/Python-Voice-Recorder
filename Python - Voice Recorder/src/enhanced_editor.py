@@ -1,31 +1,47 @@
 # enhanced_editor.py
 # Enhanced audio editor with asynchronous operations, performance improvements, and cloud integration
 
-from PySide6.QtWidgets import (
-    QWidget, QPushButton, QLabel, QFileDialog,
-    QVBoxLayout, QHBoxLayout, QLineEdit, QMessageBox,
-    QProgressBar, QTabWidget, QComboBox
-)
-from voice_recorder.waveform_viewer import WaveformViewer
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+import os
+from typing import TYPE_CHECKING, Any, Optional, Tuple, cast
+
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QCloseEvent
-import os
-from typing import Optional, Any, cast, Tuple
-from voice_recorder.config_manager import config_manager
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-from voice_recorder.audio_processing import AudioLoaderThread, AudioTrimProcessor  # type: ignore
+from voice_recorder.audio_processing import (  # type: ignore
+    AudioLoaderThread,
+    AudioTrimProcessor,
+)
 from voice_recorder.audio_recorder import AudioRecorderManager
-from typing import TYPE_CHECKING
+from voice_recorder.config_manager import config_manager
+from voice_recorder.waveform_viewer import WaveformViewer
 
 if TYPE_CHECKING:
     # For type-checkers only; import AudioSegment for annotations and
     # keep runtime import-free so optional/native deps don't crash import.
     from pydub import AudioSegment  # type: ignore
+
     # At runtime, DB/models are imported lazily inside functions to avoid
     # SQLAlchemy mapped-class registration during module import.
-from voice_recorder.scripts.utilities.version import APP_NAME, UIConstants  # type: ignore
+
 from voice_recorder.core.logging_config import get_logger
+from voice_recorder.scripts.utilities.version import (  # type: ignore
+    APP_NAME,
+    UIConstants,
+)
 from voice_recorder.settings_ui import SettingsDialog
 
 # Setup logging for this module
@@ -35,9 +51,10 @@ logger = get_logger(__name__)
 _cloud_available = False
 try:
     from voice_recorder.cloud.auth_manager import GoogleAuthManager
+    from voice_recorder.cloud.cloud_ui import CloudUI
     from voice_recorder.cloud.drive_manager import GoogleDriveManager
     from voice_recorder.cloud.feature_gate import FeatureGate
-    from voice_recorder.cloud.cloud_ui import CloudUI
+
     _cloud_available = True
 except ImportError as e:
     print(f"ℹ️ Cloud features not available: {e}")
@@ -52,8 +69,10 @@ except ImportError as e:
 
 class EnhancedAudioEditor(QWidget):
     """Enhanced audio editor with asynchronous operations, improved performance, and cloud integration"""
-    
-    def __init__(self, feature_gate: Optional[Any] = None, use_keyring: Optional[bool] = None) -> None:
+
+    def __init__(
+        self, feature_gate: Optional[Any] = None, use_keyring: Optional[bool] = None
+    ) -> None:
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} - Professional Audio Editing & Cloud Storage")
         self.setMinimumWidth(600)
@@ -110,22 +129,41 @@ class EnhancedAudioEditor(QWidget):
 
         if _cloud_available:
             # Determine effective keyring preference: explicit parameter overrides global config
-            effective_use_keyring = bool(use_keyring) if use_keyring is not None else bool(config_manager.prefers_keyring())
+            effective_use_keyring = (
+                bool(use_keyring)
+                if use_keyring is not None
+                else bool(config_manager.prefers_keyring())
+            )
             self.init_cloud_components(feature_gate, use_keyring=effective_use_keyring)
 
         self.init_ui()
         self.connect_signals()
         self.setup_audio_recorder()
-    
-    def init_cloud_components(self, feature_gate: Optional[Any] = None, use_keyring: Optional[bool] = None) -> None:
+
+    def init_cloud_components(
+        self, feature_gate: Optional[Any] = None, use_keyring: Optional[bool] = None
+    ) -> None:
         """Initialize cloud components if available"""
         try:
-            if GoogleAuthManager is not None and GoogleDriveManager is not None and FeatureGate is not None and CloudUI is not None:
+            if (
+                GoogleAuthManager is not None
+                and GoogleDriveManager is not None
+                and FeatureGate is not None
+                and CloudUI is not None
+            ):
                 # Respect caller-specified use_keyring; default to config_manager preference
-                self.auth_manager = GoogleAuthManager(use_keyring=(use_keyring if use_keyring is not None else config_manager.prefers_keyring()))
+                self.auth_manager = GoogleAuthManager(
+                    use_keyring=(
+                        use_keyring
+                        if use_keyring is not None
+                        else config_manager.prefers_keyring()
+                    )
+                )
                 self.drive_manager = GoogleDriveManager(self.auth_manager)
                 self.feature_gate = feature_gate or FeatureGate(self.auth_manager)
-                self.cloud_ui = CloudUI(self.auth_manager, self.drive_manager, self.feature_gate)
+                self.cloud_ui = CloudUI(
+                    self.auth_manager, self.drive_manager, self.feature_gate
+                )
                 print("✅ Cloud features initialized")
             else:
                 print("ℹ️ Cloud modules not available; cloud features disabled.")
@@ -137,7 +175,7 @@ class EnhancedAudioEditor(QWidget):
         a successful initialization attempt.
         """
         try:
-            if getattr(self, 'cloud_ui', None) is None:
+            if getattr(self, "cloud_ui", None) is None:
                 return
 
             # Try tabbed replacement first, then single-widget replacement
@@ -150,12 +188,15 @@ class EnhancedAudioEditor(QWidget):
 
     def _replace_tabbed_fallback_with_cloud(self) -> bool:
         """Return True if a CloudFallback tab was found and replaced."""
-        if getattr(self, 'tab_widget', None) is None:
+        if getattr(self, "tab_widget", None) is None:
             return False
         tw: QTabWidget = self.tab_widget
         for i in range(tw.count()):
             w = tw.widget(i)
-            if getattr(w, '__class__', None) and w.__class__.__name__ == 'CloudFallbackWidget':
+            if (
+                getattr(w, "__class__", None)
+                and w.__class__.__name__ == "CloudFallbackWidget"
+            ):
                 tw.removeTab(i)
                 tw.addTab(self.cloud_ui, "☁️ Cloud Features")
                 return True
@@ -163,7 +204,7 @@ class EnhancedAudioEditor(QWidget):
 
     def _replace_single_fallback_with_cloud(self) -> None:
         """Safely replace a single fallback widget with the initialized CloudUI."""
-        if getattr(self, 'fallback_widget', None) is None:
+        if getattr(self, "fallback_widget", None) is None:
             return
         try:
             fb = self.fallback_widget
@@ -188,7 +229,9 @@ class EnhancedAudioEditor(QWidget):
 
         # Title and status section
         title_label = QLabel("🎵 Voice Recorder Pro - Professional Edition")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin: 10px;")
+        title_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold; color: #2c3e50; margin: 10px;"
+        )
 
         # Preferences button (small)
         pref_btn = QPushButton("⚙ Preferences")
@@ -230,65 +273,71 @@ class EnhancedAudioEditor(QWidget):
                 effective_use_keyring = config_manager.prefers_keyring()
                 # Re-init cloud components with the updated preference
                 if _cloud_available:
-                    self.init_cloud_components(self.feature_gate, use_keyring=effective_use_keyring)
+                    self.init_cloud_components(
+                        self.feature_gate, use_keyring=effective_use_keyring
+                    )
                 self.status_label.setText("Preferences saved.")
             except Exception as e:
                 logger.exception("Failed to apply preferences: %s", e)
-                QMessageBox.warning(self, "Preferences", "Saved preferences but failed to reinitialize cloud features.")
-    
+                QMessageBox.warning(
+                    self,
+                    "Preferences",
+                    "Saved preferences but failed to reinitialize cloud features.",
+                )
+
     def create_tabbed_interface(self, main_layout: QVBoxLayout) -> None:
         """Create tabbed interface with cloud features"""
         tab_widget = QTabWidget()
         # Keep a reference for dynamic replacement when cloud becomes available
         self.tab_widget = tab_widget
-        
+
         # Main audio tab
         audio_tab = QWidget()
         audio_layout = QVBoxLayout()
-        
+
         # File operations section
         audio_layout.addWidget(self.create_file_section())
-        
-        # Recording section  
+
+        # Recording section
         audio_layout.addWidget(self.create_recording_section())
-        
+
         # Playback controls section
         audio_layout.addWidget(self.create_playback_section())
-        
+
         # Editing section
         audio_layout.addWidget(self.create_editing_section())
-        
+
         # Progress section
         audio_layout.addWidget(self.create_progress_section())
-        
+
         audio_layout.addStretch()
         audio_tab.setLayout(audio_layout)
-        
+
         # Add tabs
         tab_widget.addTab(audio_tab, "🎵 Audio Editor")
         if self.cloud_ui:
             tab_widget.addTab(self.cloud_ui, "☁️ Cloud Features")
-        
+
         main_layout.addWidget(tab_widget)
-    
+
     def create_single_interface(self, main_layout: QVBoxLayout) -> None:
         """Create single interface without cloud features"""
         """Create single interface without cloud features"""
         # File operations section
         main_layout.addWidget(self.create_file_section())
-        
+
         # Recording section
         main_layout.addWidget(self.create_recording_section())
-        
+
         # Playback controls section
         main_layout.addWidget(self.create_playback_section())
-        
+
         # Editing section
         main_layout.addWidget(self.create_editing_section())
-        
+
         # Progress section
         main_layout.addWidget(self.create_progress_section())
-        
+
         # Cloud availability notice
         if not _cloud_available:
             notice_layout = QHBoxLayout()
@@ -299,7 +348,7 @@ class EnhancedAudioEditor(QWidget):
             notice_layout.addWidget(notice_label)
             notice_layout.addWidget(install_label)
             notice_layout.addStretch()
-            
+
             notice_widget = QWidget()
             notice_widget.setLayout(notice_layout)
             main_layout.addWidget(notice_widget)
@@ -316,7 +365,7 @@ class EnhancedAudioEditor(QWidget):
             except Exception:
                 # If fallback creation fails, silently continue
                 pass
-        
+
         main_layout.addStretch()  # Push everything to top
 
     def create_file_section(self) -> QWidget:
@@ -326,7 +375,8 @@ class EnhancedAudioEditor(QWidget):
 
         # Load button
         self.load_button = QPushButton(UIConstants.LOAD_AUDIO_FILE)
-        self.load_button.setStyleSheet("""
+        self.load_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #3498db;
                 color: white;
@@ -341,7 +391,8 @@ class EnhancedAudioEditor(QWidget):
             QPushButton:disabled {
                 background-color: #bdc3c7;
             }
-        """)
+        """
+        )
         self.load_button.clicked.connect(self.load_audio_async)
 
         # File info label
@@ -365,17 +416,20 @@ class EnhancedAudioEditor(QWidget):
         """Create audio recording section"""
         section = QWidget()
         layout = QVBoxLayout()
-        
+
         # Recording title
         record_label = QLabel("🎤 Audio Recording:")
-        record_label.setStyleSheet("font-weight: bold; color: #c0392b; margin-top: 10px;")
-        
+        record_label.setStyleSheet(
+            "font-weight: bold; color: #c0392b; margin-top: 10px;"
+        )
+
         # Recording controls layout
         record_layout = QHBoxLayout()
-        
+
         # Record button
         self.record_button = QPushButton(UIConstants.START_RECORDING)
-        self.record_button.setStyleSheet("""
+        self.record_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #e74c3c;
                 color: white;
@@ -390,20 +444,23 @@ class EnhancedAudioEditor(QWidget):
             QPushButton:disabled {
                 background-color: #bdc3c7;
             }
-        """)
+        """
+        )
         self.record_button.clicked.connect(self.toggle_recording)
-        
+
         # Recording status and level display
         self.recording_status = QLabel(UIConstants.READY_TO_RECORD)
         self.recording_status.setStyleSheet("color: #34495e; margin: 5px;")
-        
+
         self.recording_duration = QLabel(UIConstants.TIME_FORMAT_ZERO)
-        self.recording_duration.setStyleSheet("font-family: monospace; font-size: 14px; color: #2c3e50;")
-        
+        self.recording_duration.setStyleSheet(
+            "font-family: monospace; font-size: 14px; color: #2c3e50;"
+        )
+
         # Audio level indicator (simple text for now)
         self.audio_level = QLabel(UIConstants.AUDIO_LEVEL_EMPTY)
         self.audio_level.setStyleSheet("color: #7f8c8d; font-size: 10px;")
-        
+
         record_layout.addWidget(self.record_button)
         record_layout.addWidget(QLabel("Duration:"))
         record_layout.addWidget(self.recording_duration)
@@ -436,11 +493,11 @@ class EnhancedAudioEditor(QWidget):
         """Create playback controls section"""
         section = QWidget()
         layout = QHBoxLayout()
-        
+
         self.play_button = QPushButton("▶️ Play")
         self.pause_button = QPushButton("⏸️ Pause")
         self.stop_button = QPushButton("⏹️ Stop")
-        
+
         # Style playback buttons
         button_style = """
             QPushButton {
@@ -458,20 +515,20 @@ class EnhancedAudioEditor(QWidget):
                 background-color: #bdc3c7;
             }
         """
-        
+
         for button in [self.play_button, self.pause_button, self.stop_button]:
             button.setStyleSheet(button_style)
             button.setEnabled(False)  # Disabled until file is loaded
-        
+
         self.play_button.clicked.connect(self.play_audio)
         self.pause_button.clicked.connect(self.pause_audio)
         self.stop_button.clicked.connect(self.stop_audio)
-        
+
         layout.addWidget(self.play_button)
         layout.addWidget(self.pause_button)
         layout.addWidget(self.stop_button)
         layout.addStretch()
-        
+
         section.setLayout(layout)
         return section
 
@@ -479,23 +536,28 @@ class EnhancedAudioEditor(QWidget):
         """Create audio editing section"""
         section = QWidget()
         layout = QVBoxLayout()
-        
+
         # Trim controls
         trim_label = QLabel("✂️ Trim Audio:")
         trim_label.setStyleSheet("font-weight: bold; color: #2c3e50; margin-top: 10px;")
-        
+
         trim_layout = QHBoxLayout()
-        
+
         self.start_input = QLineEdit()
         self.start_input.setPlaceholderText("Start time (seconds)")
-        self.start_input.setStyleSheet("padding: 8px; border: 2px solid #bdc3c7; border-radius: 4px;")
-        
+        self.start_input.setStyleSheet(
+            "padding: 8px; border: 2px solid #bdc3c7; border-radius: 4px;"
+        )
+
         self.end_input = QLineEdit()
         self.end_input.setPlaceholderText("End time (seconds)")
-        self.end_input.setStyleSheet("padding: 8px; border: 2px solid #bdc3c7; border-radius: 4px;")
-        
+        self.end_input.setStyleSheet(
+            "padding: 8px; border: 2px solid #bdc3c7; border-radius: 4px;"
+        )
+
         self.trim_button = QPushButton(UIConstants.TRIM_AND_SAVE)
-        self.trim_button.setStyleSheet("""
+        self.trim_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #e74c3c;
                 color: white;
@@ -510,20 +572,21 @@ class EnhancedAudioEditor(QWidget):
             QPushButton:disabled {
                 background-color: #bdc3c7;
             }
-        """)
+        """
+        )
         self.trim_button.setEnabled(False)
         self.trim_button.clicked.connect(self.trim_audio_async)
-        
+
         trim_layout.addWidget(QLabel("From:"))
         trim_layout.addWidget(self.start_input)
         trim_layout.addWidget(QLabel("To:"))
         trim_layout.addWidget(self.end_input)
         trim_layout.addWidget(self.trim_button)
-        
+
         layout.addWidget(trim_label)
         layout.addWidget(QWidget())  # Spacer
         layout.addLayout(trim_layout)
-        
+
         section.setLayout(layout)
         return section
 
@@ -531,10 +594,11 @@ class EnhancedAudioEditor(QWidget):
         """Create progress tracking section"""
         section = QWidget()
         layout = QVBoxLayout()
-        
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        self.progress_bar.setStyleSheet("""
+        self.progress_bar.setStyleSheet(
+            """
             QProgressBar {
                 border: 2px solid #bdc3c7;
                 border-radius: 5px;
@@ -545,22 +609,23 @@ class EnhancedAudioEditor(QWidget):
                 background-color: #3498db;
                 border-radius: 3px;
             }
-        """)
-        
+        """
+        )
+
         self.progress_label = QLabel("")
         self.progress_label.setVisible(False)
         self.progress_label.setStyleSheet("color: #7f8c8d; text-align: center;")
-        
+
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.progress_label)
-        
+
         section.setLayout(layout)
         return section
 
     def connect_signals(self):
         """Connect various signals for UI updates"""
         # Connect input validation - only if UI elements exist
-        if hasattr(self, 'start_input') and hasattr(self, 'end_input'):
+        if hasattr(self, "start_input") and hasattr(self, "end_input"):
             self.start_input.textChanged.connect(self.validate_trim_inputs)
             self.end_input.textChanged.connect(self.validate_trim_inputs)
         else:
@@ -570,17 +635,17 @@ class EnhancedAudioEditor(QWidget):
         """Load audio file asynchronously to prevent UI blocking"""
         if self.is_loading:
             return
-            
+
         file_path, _ = QFileDialog.getOpenFileName(
-            self, 
-            "Select Audio File", 
-            "recordings/raw", 
-            "Audio Files (*.wav *.mp3 *.ogg);;WAV Files (*.wav);;All Files (*)"
+            self,
+            "Select Audio File",
+            "recordings/raw",
+            "Audio Files (*.wav *.mp3 *.ogg);;WAV Files (*.wav);;All Files (*)",
         )
-        
+
         if not file_path:
             return
-            
+
         # Start async loading
         self.is_loading = True
         self.update_ui_for_loading(True)
@@ -627,7 +692,7 @@ class EnhancedAudioEditor(QWidget):
                 self,
                 "Save Trimmed Audio",
                 "recordings/edited/trimmed.wav",
-                "WAV Files (*.wav);;MP3 Files (*.mp3);;All Files (*)"
+                "WAV Files (*.wav);;MP3 Files (*.mp3);;All Files (*)",
             )
 
             if not save_path:
@@ -638,7 +703,8 @@ class EnhancedAudioEditor(QWidget):
             self.update_ui_for_processing(True)
 
             self.trim_processor = AudioTrimProcessor(
-                self.audio_segment, start_ms, end_ms, save_path)  # type: ignore
+                self.audio_segment, start_ms, end_ms, save_path
+            )  # type: ignore
 
             self.trim_processor.progress_updated.connect(self.on_trim_progress)
             self.trim_processor.trim_completed.connect(self.on_trim_completed)
@@ -649,9 +715,13 @@ class EnhancedAudioEditor(QWidget):
             self.show_progress("Trimming Audio")
 
             self.trim_processor.start()
-            
+
         except ValueError:
-            QMessageBox.warning(self, "Invalid Input", "Please enter valid numeric values for start and end times.")
+            QMessageBox.warning(
+                self,
+                "Invalid Input",
+                "Please enter valid numeric values for start and end times.",
+            )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to start trim operation: {e}")
 
@@ -726,7 +796,7 @@ class EnhancedAudioEditor(QWidget):
         duration_ms = len(self.audio_segment)  # type: ignore
 
         # Validate range and set button state
-        valid = (0 <= start_ms < end_ms <= duration_ms)
+        valid = 0 <= start_ms < end_ms <= duration_ms
         if self.trim_button is not None:
             try:
                 self.trim_button.setEnabled(valid and not self.is_processing)
@@ -826,7 +896,9 @@ class EnhancedAudioEditor(QWidget):
     def on_load_error(self, error_message: str):
         """Handle audio loading errors"""
         try:
-            QMessageBox.critical(self, "Loading Error", f"Failed to load audio file:\n{error_message}")
+            QMessageBox.critical(
+                self, "Loading Error", f"Failed to load audio file:\n{error_message}"
+            )
         except Exception:
             pass
         if self.status_label is not None:
@@ -858,11 +930,15 @@ class EnhancedAudioEditor(QWidget):
         """Handle successful trim completion"""
         filename = os.path.basename(output_path)
         self.status_label.setText(f"✅ Trimmed audio saved: {filename}")
-        QMessageBox.information(self, "Success", f"Audio trimmed successfully!\nSaved to: {filename}")
+        QMessageBox.information(
+            self, "Success", f"Audio trimmed successfully!\nSaved to: {filename}"
+        )
 
     def on_trim_error(self, error_message: str):
         """Handle trim operation errors"""
-        QMessageBox.critical(self, "Trim Error", f"Failed to trim audio:\n{error_message}")
+        QMessageBox.critical(
+            self, "Trim Error", f"Failed to trim audio:\n{error_message}"
+        )
         self.status_label.setText("Trim operation failed.")
 
     def on_trim_progress(self, value: int, message: str):
@@ -899,11 +975,11 @@ class EnhancedAudioEditor(QWidget):
         if self.loader_thread and self.loader_thread.isRunning():
             self.loader_thread.terminate()
             self.loader_thread.wait()
-            
+
         if self.trim_processor and self.trim_processor.isRunning():
             self.trim_processor.terminate()
             self.trim_processor.wait()
-            
+
         event.accept()
 
     def setup_audio_recorder(self):
@@ -963,7 +1039,9 @@ class EnhancedAudioEditor(QWidget):
             self.device_selector.clear()
             self.device_selector.addItem("Default")
             for dev in devices:
-                self.device_selector.addItem(f"{dev['index']}: {dev['name']}", dev['index'])
+                self.device_selector.addItem(
+                    f"{dev['index']}: {dev['name']}", dev["index"]
+                )
             self.device_selector.blockSignals(False)
             # If manager has a selected device, set it
             sel = self.audio_recorder.get_selected_device()
@@ -993,7 +1071,8 @@ class EnhancedAudioEditor(QWidget):
         """Handle recording start"""
         self.is_recording = True
         self.record_button.setText(UIConstants.STOP_RECORDING)
-        self.record_button.setStyleSheet("""
+        self.record_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #34495e;
                 color: white;
@@ -1005,7 +1084,8 @@ class EnhancedAudioEditor(QWidget):
             QPushButton:hover {
                 background-color: #2c3e50;
             }
-        """)
+        """
+        )
         self.recording_status.setText(UIConstants.RECORDING_IN_PROGRESS)
         self.status_label.setText("🎤 Recording audio...")
 
@@ -1013,7 +1093,8 @@ class EnhancedAudioEditor(QWidget):
         """Handle recording completion with optional cloud upload"""
         self.is_recording = False
         self.record_button.setText(UIConstants.START_RECORDING)
-        self.record_button.setStyleSheet("""
+        self.record_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #e74c3c;
                 color: white;
@@ -1025,24 +1106,27 @@ class EnhancedAudioEditor(QWidget):
             QPushButton:hover {
                 background-color: #c0392b;
             }
-        """)
-        
+        """
+        )
+
         filename = os.path.basename(file_path)
         self.recording_status.setText(f"✅ Recording saved: {filename}")
         self.status_label.setText(f"✅ Recording completed: {duration:.1f}s")
         self.recording_duration.setText(UIConstants.TIME_FORMAT_ZERO)
         self.audio_level.setText(UIConstants.AUDIO_LEVEL_EMPTY)
-        
+
         # Save to database
         self.save_recording_metadata(file_path, duration)
-        
+
         # Automatically load the recorded file for editing
         self.load_recorded_file(file_path)
-        
+
         # Cloud integration: Set current recording for quick upload
         if _cloud_available and self.cloud_ui:
             self.cloud_ui.set_current_recording(file_path)  # type: ignore
-            self.status_label.setText(f"✅ Recording completed: {duration:.1f}s | ☁️ Ready for cloud upload")
+            self.status_label.setText(
+                f"✅ Recording completed: {duration:.1f}s | ☁️ Ready for cloud upload"
+            )
 
     def on_recording_progress(self, duration: float, audio_level: float):
         """Handle recording progress updates"""
@@ -1050,7 +1134,7 @@ class EnhancedAudioEditor(QWidget):
         minutes = int(duration // 60)
         seconds = int(duration % 60)
         self.recording_duration.setText(f"{minutes:02d}:{seconds:02d}")
-        
+
         # Update audio level (simple visualization)
         level_percent = min(100, audio_level * 1000)  # Scale for display
         level_bars = "█" * int(level_percent / 10)
@@ -1062,7 +1146,7 @@ class EnhancedAudioEditor(QWidget):
         self.record_button.setText(UIConstants.START_RECORDING)
         self.recording_status.setText(f"❌ Recording error: {error_message}")
         self.status_label.setText("Recording failed.")
-        
+
         # Reset UI state
         self.recording_duration.setText(UIConstants.TIME_FORMAT_ZERO)
         self.audio_level.setText(UIConstants.AUDIO_LEVEL_EMPTY)
@@ -1108,7 +1192,7 @@ class EnhancedAudioEditor(QWidget):
     def load_recorded_file(self, file_path: str) -> None:
         """Automatically load recorded file for editing"""
         self.audio_file = file_path
-        
+
         try:
             # Lazy-import pydub.AudioSegment to avoid import-time crashes when
             # optional native deps (audioop/pyaudioop) are missing in the
@@ -1122,7 +1206,7 @@ class EnhancedAudioEditor(QWidget):
 
             # Load audio segment
             self.audio_segment = AudioSegment.from_wav(file_path)  # type: ignore
-            
+
             # Update UI
             filename = os.path.basename(file_path)
             if self.audio_segment is not None:  # type: ignore
@@ -1131,16 +1215,16 @@ class EnhancedAudioEditor(QWidget):
                 self.file_info_label.setText(
                     f"📄 {filename} | ⏱️ {duration:.1f}s | 💾 {file_size:.1f}MB"
                 )
-                
+
                 # Enable playback controls
                 for button in [self.play_button, self.pause_button, self.stop_button]:
                     button.setEnabled(True)
-                    
+
                 # Setup media player
                 self.player.setSource(QUrl.fromLocalFile(file_path))
-                
+
                 # Validate trim inputs
                 self.validate_trim_inputs()
-            
+
         except Exception as e:
             print(f"Failed to load recorded file: {e}")
