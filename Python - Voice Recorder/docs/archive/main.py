@@ -4,7 +4,7 @@
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtGui import QIcon
 from enhanced_editor import EnhancedAudioEditor
-from models.database import engine, Base
+from voice_recorder.models.database import engine, Base
 from sqlalchemy.sql import text
 from assets.icon import get_icon_path, get_app_metadata
 import sys
@@ -36,7 +36,7 @@ def verify_database_setup():
     """Verify database is properly set up before launching application"""
     try:
         # Test database connection
-        from models.database import SessionLocal
+        from voice_recorder.models.database import SessionLocal
         with SessionLocal() as db:
             # Try to query the recordings table to verify it exists
             result = db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='recordings';"))

@@ -1,8 +1,9 @@
+import logging
 import os
 import tempfile
-import logging
-import pytest
 from typing import Any
+
+import pytest
 
 
 def test_drive_manager_not_authenticated(monkeypatch: Any, caplog: Any):
@@ -14,12 +15,16 @@ def test_drive_manager_not_authenticated(monkeypatch: Any, caplog: Any):
             return False
 
         def get_credentials(self):  # should never be called
-            raise AssertionError("get_credentials should not be called when not authenticated")
+            raise AssertionError(
+                "get_credentials should not be called when not authenticated"
+            )
 
     mgr = dm.GoogleDriveManager(StubAuth())
 
     # _get_service should raise a clear auth error first
-    with pytest.raises(RuntimeError, match="Not authenticated. Please sign in first."):
+    from cloud.exceptions import NotAuthenticatedError
+
+    with pytest.raises(NotAuthenticatedError):
         mgr._get_service()  # type: ignore[attr-defined]
 
     # Higher-level helpers should return safe defaults when not authenticated
@@ -29,11 +34,17 @@ def test_drive_manager_not_authenticated(monkeypatch: Any, caplog: Any):
     assert mgr.download_recording("id", os.path.join(os.getcwd(), "out.dat")) is False
     assert mgr.delete_recording("id") is False
 
-    # upload_recording should return None; ensure file exists to pass existence check
+    # Using the new uploader interface should raise NotAuthenticatedError when not signed in
     fd, path = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     try:
-        assert mgr.upload_recording(path) is None
+        uploader = getattr(mgr, "get_uploader", None)
+        if callable(uploader):
+            with pytest.raises(NotAuthenticatedError):
+                mgr.get_uploader().upload(path)
+        else:
+            # Fallback to legacy behaviour
+            assert mgr.upload_recording(path) is None
     finally:
         try:
             os.remove(path)

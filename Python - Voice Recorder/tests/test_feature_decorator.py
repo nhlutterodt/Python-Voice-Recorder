@@ -1,6 +1,4 @@
-from typing import Any, Dict, Optional, List
-
-import pytest
+from typing import Any, Dict, List, Optional
 
 
 class StubAuthManagerUnauth:
@@ -20,7 +18,7 @@ class StubAuthManagerAuth:
 
 
 def test_requires_feature_allows_when_enabled():
-    from cloud.feature_gate import FeatureGate, FeatureDecorator
+    from cloud.feature_gate import FeatureDecorator, FeatureGate
 
     gate = FeatureGate(StubAuthManagerAuth())
     deco = FeatureDecorator(gate)
@@ -38,7 +36,7 @@ def test_requires_feature_allows_when_enabled():
 
 
 def test_requires_feature_blocks_when_disabled_and_logs(caplog: Any):
-    from cloud.feature_gate import FeatureGate, FeatureDecorator
+    from cloud.feature_gate import FeatureDecorator, FeatureGate
 
     gate = FeatureGate(StubAuthManagerUnauth())
     messages: List[str] = []
@@ -60,7 +58,7 @@ def test_requires_feature_blocks_when_disabled_and_logs(caplog: Any):
 
 
 def test_requires_feature_blocks_without_message_when_suppressed(caplog: Any):
-    from cloud.feature_gate import FeatureGate, FeatureDecorator
+    from cloud.feature_gate import FeatureDecorator, FeatureGate
 
     gate = FeatureGate(StubAuthManagerUnauth())
     messages: List[str] = []

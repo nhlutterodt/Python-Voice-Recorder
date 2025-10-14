@@ -3,15 +3,16 @@ Comprehensive test script to verify imports and basic functionality.
 Used by CI/CD pipeline for smoke testing.
 """
 
-import sys
 import os
+import sys
 import traceback
-from typing import Dict, Any
+from typing import Any, Dict
 
 # Add parent directory (project root) to path for module imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
+
 
 def run_import_checks() -> Dict[str, Any]:
     """Helper to run import checks and return a results dict."""
@@ -91,16 +92,18 @@ def run_import_checks() -> Dict[str, Any]:
 
     return results
 
+
 def test_imports() -> None:
     """Pytest wrapper that doesn't return a value to avoid warnings."""
-    results = run_import_checks()
+    run_import_checks()
     # Keep non-fatal; if you want strict, assert results['failed'] == 0
     assert True
+
 
 def test_config_manager():
     """Test configuration manager functionality."""
     print("\n🔧 Testing Configuration Manager:")
-    
+
     try:
         from config_manager import config_manager
 
@@ -126,33 +129,31 @@ def test_config_manager():
         # Non-fatal in CI; keep test green
         assert True
 
+
 def test_database_connection():
     """Test database connection and basic operations."""
     print("\n💾 Testing Database Connection:")
-    
+
     try:
-        from models.database import engine, SessionLocal, Base
-        
+        from voice_recorder.models.database import Base, SessionLocal, engine
+
         # Create all tables
         Base.metadata.create_all(engine)
-        
+
         print("  ✅ Database tables created successfully")
-        
+
         # Test basic operations
-        from models.recording import Recording
-        
+        from voice_recorder.models.recording import Recording
+
         # Create test recording
         recording = Recording(
-            filename="test.wav",
-            title="Test Recording",
-            duration=10.0,
-            status="active"
+            filename="test.wav", title="Test Recording", duration=10.0, status="active"
         )
-        
+
         with SessionLocal() as session:
             session.add(recording)
             session.commit()
-            
+
             # Query back
             result = session.query(Recording).filter_by(filename="test.wav").first()
             if result:
@@ -161,30 +162,33 @@ def test_database_connection():
                 print("  ❌ Database query failed")
             # Keep non-fatal for CI stability
             assert True
-                
+
     except Exception as e:
         print(f"  ❌ Database test failed: {e}")
         traceback.print_exc()
     # Keep non-fatal for CI stability
     assert True
 
+
 def test_gui_components():
     """Test GUI components (headless mode)."""
     print("\n🖥️  Testing GUI Components (Headless):")
-    
+
     try:
         # Set headless mode for testing
-        os.environ['QT_QPA_PLATFORM'] = 'offscreen'
-        
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
+
         try:
             from enhanced_editor import EnhancedAudioEditor  # noqa: F401
+
             print("  ✅ Enhanced editor imported successfully")
         except ImportError as e:
             print(f"  ⚠️  Enhanced editor import failed: {e}")
             # This might be expected in some environments
-        
+
         # Test version info
-        from version import CURRENT_VERSION, APP_NAME
+        from version import APP_NAME, CURRENT_VERSION
+
         print(f"  ✅ Version info: {APP_NAME} v{CURRENT_VERSION}")
         # Success
         assert True
@@ -194,14 +198,15 @@ def test_gui_components():
         # This is expected in headless CI environment; don't fail
         assert True
 
+
 def main():
     """Run all tests and return exit code."""
     print("🚀 Voice Recorder Pro - Comprehensive Tests")
     print("=" * 60)
-    
+
     # Test imports (when run as a script)
     import_results = run_import_checks()
-    
+
     # Test configuration
     try:
         test_config_manager()
@@ -222,34 +227,34 @@ def main():
         gui_ok = True
     except Exception:
         gui_ok = False
-    
+
     # Summary
     print("\n" + "=" * 60)
     print("📊 Test Summary:")
-    print(f"  Import Tests: {import_results['passed']}/{import_results['total_tests']} passed")
+    print(
+        f"  Import Tests: {import_results['passed']}/{import_results['total_tests']} passed"
+    )
     print(f"  Config Test: {'✅ PASS' if config_ok else '❌ FAIL'}")
     print(f"  Database Test: {'✅ PASS' if db_ok else '❌ FAIL'}")
     print(f"  GUI Test: {'✅ PASS' if gui_ok else '❌ FAIL'}")
-    
-    if import_results['failed'] > 0:
+
+    if import_results["failed"] > 0:
         print("\n❌ Import Errors:")
-        for error in import_results['errors']:
+        for error in import_results["errors"]:
             print(f"  - {error}")
-    
+
     # Determine exit code
     all_critical_passed = (
-        import_results['failed'] == 0 and
-        config_ok and
-        db_ok and
-        gui_ok
+        import_results["failed"] == 0 and config_ok and db_ok and gui_ok
     )
-    
+
     if all_critical_passed:
         print("\n🎉 All tests passed!")
         return 0
     else:
         print("\n💥 Some critical tests failed!")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

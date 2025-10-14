@@ -24,6 +24,37 @@ Voice Recorder Pro is a professional audio recording application developed by Ne
    pip install -r requirements_dev.txt
    ```
 
+### Pre-commit hooks
+
+We use pre-commit to run linters (ruff/black/isort) and basic checks before committing.
+
+Install and enable hooks in your local environment:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install pre-commit
+pre-commit install
+# To run hooks across the repo once:
+pre-commit run --all-files
+```
+
+The CI will run the same checks. If you see a failing hook locally, fix the issues and re-run the hooks before pushing.
+
+#### Alternative: install via package extras
+
+If you prefer to use package extras instead of the requirements file you can install the `test` extras exposed in `pyproject.toml`:
+
+```bash
+# From the repository root (quotes required on Windows paths that contain spaces):
+python -m pip install -e "./Python - Voice Recorder"[test]
+# or
+pip install -e "./Python - Voice Recorder"[test]
+```
+
+Notes:
+- `requirements_dev.txt` lists the same runtime and developer tools used in CI (pytest, SQLAlchemy, psutil, ruff, black, isort).
+- On Windows, paths with spaces must be quoted as shown above when using PowerShell or CMD.
+
 ### Optional: Cloud Features
 For cloud integration development:
 ```bash

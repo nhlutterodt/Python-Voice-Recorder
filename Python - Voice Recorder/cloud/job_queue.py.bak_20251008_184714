@@ -1,0 +1,441 @@
+"""A minimal SQLite-backed job queue and a simple thread worker.
+
+This module provides a compact, durable job queue useful for background
+upload orchestration in desktop apps. It's intentionally small and
+easy to unit test: enqueue -> process_once -> mark_completed/failed.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+import json
+import threading
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, Optional
+
+
+@dataclass
+class JobRecord:
+    id: int
+    job_type: str
+    payload: Dict[str, Any]
+    status: str
+    attempts: int
+    max_retries: int
+    last_error: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+class JobQueue:
+    """Simple SQLite-backed job queue.
+
+    Schema fields: id, job_type, payload(JSON), status, attempts, max_retries,
+    last_error, created_at, updated_at.
+    """
+
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self._ensure_table()
+
+    def _connect(self):
+        return sqlite3.connect(self.db_path, timeout=10, check_same_thread=False)
+
+    def _ensure_table(self):
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_type TEXT NOT NULL,
+                    payload TEXT,
+                    status TEXT NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    max_retries INTEGER NOT NULL DEFAULT 3,
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.commit()
+
+    def enqueue(self, job_type: str, payload: Dict[str, Any], max_retries: int = 3) -> int:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO jobs (job_type, payload, status, attempts, max_retries, created_at, updated_at) VALUES (?, ?, 'pending', 0, ?, ?, ?)",
+                (job_type, json.dumps(payload), max_retries, now, now),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+
+    def get_job(self, job_id: int) -> Optional[JobRecord]:
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, job_type, payload, status, attempts, max_retries, last_error, created_at, updated_at FROM jobs WHERE id=?",
+                (job_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return JobRecord(
+                id=int(row[0]),
+                job_type=row[1],
+                payload=json.loads(row[2]) if row[2] else {},
+                status=row[3],
+                attempts=int(row[4]),
+                max_retries=int(row[5]),
+                last_error=row[6],
+                created_at=row[7],
+                updated_at=row[8],
+            )
+
+    def fetch_next_pending(self) -> Optional[JobRecord]:
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, job_type, payload, status, attempts, max_retries, last_error, created_at, updated_at FROM jobs WHERE status='pending' ORDER BY created_at ASC LIMIT 1"
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return JobRecord(
+                id=int(row[0]),
+                job_type=row[1],
+                payload=json.loads(row[2]) if row[2] else {},
+                status=row[3],
+                attempts=int(row[4]),
+                max_retries=int(row[5]),
+                last_error=row[6],
+                created_at=row[7],
+                updated_at=row[8],
+            )
+
+    def _update_job(self, job_id: int, **fields: Any) -> None:
+        if not fields:
+            return
+        set_parts = []
+        params: list[Any] = []
+        for k, v in fields.items():
+            set_parts.append(f"{k} = ?")
+            params.append(v)
+        # append updated_at and job_id
+        params.append(datetime.now(timezone.utc).isoformat())
+        params.append(job_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(f"UPDATE jobs SET {', '.join(set_parts)}, updated_at = ? WHERE id = ?", tuple(params))
+            conn.commit()
+
+    def mark_running(self, job_id: int) -> None:
+        self._update_job(job_id, status='running')
+
+    def mark_completed(self, job_id: int) -> None:
+        self._update_job(job_id, status='completed')
+
+    def mark_failed(self, job_id: int, last_error: str, increment_attempt: bool = True) -> None:
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT attempts, max_retries FROM jobs WHERE id = ?", (job_id,))
+            row = cur.fetchone()
+            if not row:
+                return
+            attempts, max_retries = int(row[0]), int(row[1])
+            attempts = attempts + 1 if increment_attempt else attempts
+            now = datetime.now(timezone.utc).isoformat()
+            if attempts > max_retries:
+                cur.execute(
+                    "UPDATE jobs SET attempts = ?, last_error = ?, status = 'failed', updated_at = ? WHERE id = ?",
+                    (attempts, last_error, now, job_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE jobs SET attempts = ?, last_error = ?, status = 'pending', updated_at = ? WHERE id = ?",
+                    (attempts, last_error, now, job_id),
+                )
+            conn.commit()
+
+    def process_once(self, handlers: Dict[str, Callable[[Dict[str, Any]], bool]]) -> Optional[int]:
+        """Process a single pending job using provided handlers.
+
+        Returns the job id processed or None if none found. Handlers should
+        return True on success, False on handled failure, or raise an
+        exception on error.
+        """
+        job = self.fetch_next_pending()
+        if job is None:
+            return None
+
+        self.mark_running(job.id)
+
+        handler = handlers.get(job.job_type)
+        if handler is None:
+            self.mark_failed(job.id, f"no handler for {job.job_type}")
+            return job.id
+
+        try:
+            ok = handler(job.payload)
+            if ok:
+                self.mark_completed(job.id)
+            else:
+                self.mark_failed(job.id, "handler returned false")
+        except Exception as e:
+            self.mark_failed(job.id, str(e))
+
+        return job.id
+
+
+class JobWorker:
+    """Background thread worker that polls the JobQueue and processes jobs."""
+
+    def __init__(self, queue: JobQueue, handlers: Dict[str, Callable[[Dict[str, Any]], bool]], poll_interval: float = 1.0):
+        self.queue = queue
+        self.handlers = handlers
+        self.poll_interval = poll_interval
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    def start(self) -> None:
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop_event.is_set():
+            processed = self.queue.process_once(self.handlers)
+            if processed is None:
+                time.sleep(self.poll_interval)
+
+    def stop(self, timeout: Optional[float] = None) -> None:
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join(timeout)
+"""A minimal SQLite-backed job queue and a simple thread worker.
+
+This module provides a compact, durable job queue useful for background
+upload orchestration in desktop apps. It's intentionally small and
+easy to unit test: enqueue -> process_once -> mark_completed/failed.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+import json
+import threading
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, Optional
+
+
+@dataclass
+class JobRecord:
+    id: int
+    job_type: str
+    payload: Dict[str, Any]
+    status: str
+    attempts: int
+    max_retries: int
+    last_error: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+class JobQueue:
+    """Simple SQLite-backed job queue.
+
+    Schema fields: id, job_type, payload(JSON), status, attempts, max_retries,
+    last_error, created_at, updated_at.
+    """
+
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self._ensure_table()
+
+    def _connect(self):
+        return sqlite3.connect(self.db_path, timeout=10, check_same_thread=False)
+
+    def _ensure_table(self):
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_type TEXT NOT NULL,
+                    payload TEXT,
+                    status TEXT NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    max_retries INTEGER NOT NULL DEFAULT 3,
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.commit()
+
+    def enqueue(self, job_type: str, payload: Dict[str, Any], max_retries: int = 3) -> int:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO jobs (job_type, payload, status, attempts, max_retries, created_at, updated_at) VALUES (?, ?, 'pending', 0, ?, ?, ?)",
+                (job_type, json.dumps(payload), max_retries, now, now),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+
+    def get_job(self, job_id: int) -> Optional[JobRecord]:
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, job_type, payload, status, attempts, max_retries, last_error, created_at, updated_at FROM jobs WHERE id=?",
+                (job_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return JobRecord(
+                id=int(row[0]),
+                job_type=row[1],
+                payload=json.loads(row[2]) if row[2] else {},
+                status=row[3],
+                attempts=int(row[4]),
+                max_retries=int(row[5]),
+                last_error=row[6],
+                created_at=row[7],
+                updated_at=row[8],
+            )
+
+    def fetch_next_pending(self) -> Optional[JobRecord]:
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, job_type, payload, status, attempts, max_retries, last_error, created_at, updated_at FROM jobs WHERE status='pending' ORDER BY created_at ASC LIMIT 1"
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return JobRecord(
+                id=int(row[0]),
+                job_type=row[1],
+                payload=json.loads(row[2]) if row[2] else {},
+                status=row[3],
+                attempts=int(row[4]),
+                max_retries=int(row[5]),
+                last_error=row[6],
+                created_at=row[7],
+                updated_at=row[8],
+            )
+
+    def _update_job(self, job_id: int, **fields: Any) -> None:
+        if not fields:
+            return
+        set_parts = []
+        params: list[Any] = []
+        for k, v in fields.items():
+            set_parts.append(f"{k} = ?")
+            params.append(v)
+        # append updated_at and job_id
+        params.append(datetime.now(timezone.utc).isoformat())
+        params.append(job_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(f"UPDATE jobs SET {', '.join(set_parts)}, updated_at = ? WHERE id = ?", tuple(params))
+            conn.commit()
+
+    def mark_running(self, job_id: int) -> None:
+        self._update_job(job_id, status='running')
+
+    def mark_completed(self, job_id: int) -> None:
+        self._update_job(job_id, status='completed')
+
+    def mark_failed(self, job_id: int, last_error: str, increment_attempt: bool = True) -> None:
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT attempts, max_retries FROM jobs WHERE id = ?", (job_id,))
+            row = cur.fetchone()
+            if not row:
+                return
+            attempts, max_retries = int(row[0]), int(row[1])
+            attempts = attempts + 1 if increment_attempt else attempts
+            now = datetime.now(timezone.utc).isoformat()
+            if attempts > max_retries:
+                cur.execute(
+                    "UPDATE jobs SET attempts = ?, last_error = ?, status = 'failed', updated_at = ? WHERE id = ?",
+                    (attempts, last_error, now, job_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE jobs SET attempts = ?, last_error = ?, status = 'pending', updated_at = ? WHERE id = ?",
+                    (attempts, last_error, now, job_id),
+                )
+            conn.commit()
+
+    def process_once(self, handlers: Dict[str, Callable[[Dict[str, Any]], bool]]) -> Optional[int]:
+        """Process a single pending job using provided handlers.
+
+        Returns the job id processed or None if none found. Handlers should
+        return True on success, False on handled failure, or raise an
+        exception on error.
+        """
+        job = self.fetch_next_pending()
+        if job is None:
+            return None
+
+        self.mark_running(job.id)
+
+        handler = handlers.get(job.job_type)
+        if handler is None:
+            self.mark_failed(job.id, f"no handler for {job.job_type}")
+            return job.id
+
+        try:
+            ok = handler(job.payload)
+            if ok:
+                self.mark_completed(job.id)
+            else:
+                self.mark_failed(job.id, "handler returned false")
+        except Exception as e:
+            self.mark_failed(job.id, str(e))
+
+        return job.id
+
+
+class JobWorker:
+    """Background thread worker that polls the JobQueue and processes jobs."""
+
+    def __init__(self, queue: JobQueue, handlers: Dict[str, Callable[[Dict[str, Any]], bool]], poll_interval: float = 1.0):
+        self.queue = queue
+        self.handlers = handlers
+        self.poll_interval = poll_interval
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    def start(self) -> None:
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop_event.is_set():
+            processed = self.queue.process_once(self.handlers)
+            if processed is None:
+                time.sleep(self.poll_interval)
+
+    def stop(self, timeout: Optional[float] = None) -> None:
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join(timeout)
+ 

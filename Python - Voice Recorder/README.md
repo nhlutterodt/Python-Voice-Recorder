@@ -1,5 +1,10 @@
 # 🎤 Voice Recorder Pro v2.0.0-beta
 
+[![CI](https://github.com/nhlutterodt/Python-Voice-Recorder/workflows/CI/badge.svg?branch=feature/backend-robustness)](https://github.com/nhlutterodt/Python-Voice-Recorder/actions/workflows/ci.yml)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Imports: isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
+[![Linting: ruff](https://img.shields.io/badge/linting-ruff-red)](https://github.com/astral-sh/ruff)
+
 *A professional audio recording application with advanced editing and cloud integration*
 
 **Created by Neils Haldane-Lutterodt with GitHub Copilot assistance**
@@ -50,7 +55,7 @@ cd Python---Voice-Recorder
 pip install -r requirements.txt
 
 # Launch the application
-python enhanced_main.py
+python -m src.entrypoint
 ```
 
 ### Optional: Cloud Features
@@ -62,6 +67,52 @@ pip install -r requirements_cloud.txt
 ```
 
 ## 📖 Documentation
+
+## 🛠️ Local development setup (recommended)
+
+Follow these steps to prepare a reproducible local development environment. This approach is persistent and configurable via environment variables or a `.env` file.
+
+1. From the repository root run the one-line setup script (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\Python - Voice Recorder\scripts\setup_local_env.ps1"
+```
+
+- This will create required directories (`db`, `recordings/`, `logs`, `config`).
+- It will create a `venv` if none exists, upgrade pip, install packages from `Python - Voice Recorder/requirements.txt`, and initialize the database tables.
+- The script also writes a `.env.template` (if requested) so you can copy it to `.env` and customize local settings.
+
+2. Launch the application using one of these methods:
+
+**🚀 Quick Launch (Recommended):**
+```powershell
+cd ".\Python - Voice Recorder"
+.\Launch_VoiceRecorderPro.ps1 -Dev
+```
+
+**Alternative Methods:**
+```powershell
+# Batch file (Windows)
+.\Launch_VoiceRecorderPro.bat -dev
+
+# Manual launch
+.\venv\Scripts\Activate.ps1
+cd ".\Python - Voice Recorder"
+$env:PYTHONPATH = "."
+python -m src.entrypoint
+```
+
+**🔑 Key Requirements for Manual Launch:**
+- Must run from `Python - Voice Recorder` directory
+- Must set `PYTHONPATH=.` (current directory)
+- Must use Python from the virtual environment
+
+Configuration notes:
+- You can override any app path or setting via environment variables (see `config_manager.py`). The most important is `DATABASE_URL` (for example `sqlite:///db/app.db` or a full absolute sqlite path). If you set a relative sqlite URL, it will be resolved against the project root and the parent directory will be created automatically.
+- To enable cloud features, set the Google credentials either through environment variables or by placing `client_secrets.json` into the `config/` folder. See `config_manager.py` and the Cloud Setup Guide for details.
+
+This setup is deterministic and intended for developer machines and CI. If you want cross-platform parity, I can add an equivalent Bash script for macOS/Linux.
+
 
 - **[Quick Start Guide](docs/quickstart/README.md)** - Get up and running in minutes
 - **[Build Instructions](README_BUILD.md)** - Technical build documentation
@@ -146,7 +197,7 @@ python scripts/build_voice_recorder_pro.py
 ### Project Structure
 ```
 voice-recorder-pro/
-├── enhanced_main.py          # Main application entry
+├── src/entrypoint.py         # Main application entry (use `python -m src.entrypoint`)
 ├── audio_recorder.py         # Core recording engine
 ├── enhanced_editor.py        # Audio editing interface
 ├── audio_processing.py       # Audio processing utilities

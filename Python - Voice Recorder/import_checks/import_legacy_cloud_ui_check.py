@@ -1,0 +1,19 @@
+"""Import check for legacy cloud.cloud_ui module"""
+import sys
+from importlib import import_module
+
+repo_root = r"c:\Users\Owner\Voice Recorder\Python-Voice-Recorder"
+src_path = repo_root + r"\Python - Voice Recorder"
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+try:
+    m = import_module('cloud.cloud_ui')
+    print('import ok: cloud.cloud_ui')
+except Exception:
+    import traceback
+    traceback.print_exc()
+    print('import failed: cloud.cloud_ui', file=sys.stderr)
+    raise

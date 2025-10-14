@@ -1,0 +1,58 @@
+2025-10-09 15:41:50,244 - VoiceRecorderPro - INFO - logging_config.py:69 - Logging system initialized
+2025-10-09 15:41:50,244 - VoiceRecorderPro - INFO - enhanced_main.py:56 - Starting Enhanced Voice Recorder application
+2025-10-09 15:41:50,244 - VoiceRecorderPro - INFO - enhanced_main.py:66 - Application properties configured
+2025-10-09 15:41:50,250 - VoiceRecorderPro - INFO - enhanced_main.py:88 - Main window created and displayed
+2025-10-09 15:41:50,250 - VoiceRecorderPro - INFO - enhanced_main.py:91 - Application event loop starting
+2025-10-09 15:41:50,253 - VoiceRecorderPro - INFO - enhanced_main.py:56 - Starting Enhanced Voice Recorder application
+2025-10-09 15:41:50,253 - VoiceRecorderPro - INFO - enhanced_main.py:66 - Application properties configured
+2025-10-09 15:41:50,254 - VoiceRecorderPro - INFO - enhanced_main.py:88 - Main window created and displayed
+2025-10-09 15:41:50,254 - VoiceRecorderPro - INFO - enhanced_main.py:91 - Application event loop starting
+2025-10-09 15:41:50,396 - VoiceRecorderPro - INFO - enhanced_main.py:56 - Starting Enhanced Voice Recorder application
+2025-10-09 15:41:50,396 - VoiceRecorderPro - INFO - enhanced_main.py:66 - Application properties configured
+2025-10-09 15:41:50,396 - VoiceRecorderPro - INFO - enhanced_main.py:88 - Main window created and displayed
+2025-10-09 15:41:50,396 - VoiceRecorderPro - INFO - enhanced_main.py:91 - Application event loop starting
+2025-10-09 15:41:50,451 - VoiceRecorderPro.audio_recorder - ERROR - audio_recorder.py:94 - Recording failed
+Traceback (most recent call last):
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\src\audio_recorder.py", line 80, in run
+    with sd.InputStream(**stream_kwargs):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\tests\test_mid_recording_disconnect.py", line 17, in __init__
+    raise RuntimeError("Device disappeared on open")
+RuntimeError: Device disappeared on open
+2025-10-09 15:41:50,577 - VoiceRecorderPro.audio_recorder - ERROR - audio_recorder.py:94 - Recording failed
+Traceback (most recent call last):
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\src\audio_recorder.py", line 80, in run
+    with sd.InputStream(**stream_kwargs):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\tests\test_mid_recording_disconnect.py", line 71, in __exit__
+    raise RuntimeError("Device disconnected during recording")
+RuntimeError: Device disconnected during recording
+2025-10-09 15:41:50,577 - VoiceRecorderPro.audio_recorder - ERROR - audio_recorder.py:141 - Error in audio callback
+Traceback (most recent call last):
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\src\audio_recorder.py", line 130, in audio_callback
+    wav_file.writeframes(int16.tobytes())
+  File "C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\Python - Voice Recorder\tests\test_mid_recording_disconnect.py", line 118, in writeframes
+    raise RuntimeError("disk write error simulated")
+RuntimeError: disk write error simulated
+2025-10-09 15:41:50,584 - services.file_storage.config.storage_config - INFO - storage_config.py:43 - Initializing StorageConfig for environment: testing
+2025-10-09 15:41:50,584 - services.file_storage.config.storage_config - INFO - storage_config.py:73 - StorageConfig initialization completed successfully
+2025-10-09 15:41:50,589 - services.file_storage.config.storage_config - INFO - storage_config.py:43 - Initializing StorageConfig for environment: testing
+2025-10-09 15:41:50,589 - services.file_storage.config.storage_config - INFO - storage_config.py:73 - StorageConfig initialization completed successfully
+2025-10-09 15:41:50,590 - VoiceRecorderPro.src.enhanced_audio_recorder - INFO - enhanced_audio_recorder.py:309 - Storage health OK: 834599.41MB available
+2025-10-09 15:41:50,590 - VoiceRecorderPro.src.enhanced_audio_recorder - ERROR - enhanced_audio_recorder.py:317 - Raw recordings directory is not writable
+2025-10-09 15:41:50,590 - VoiceRecorderPro.src.enhanced_audio_recorder - INFO - enhanced_audio_recorder.py:281 - Enhanced storage initialized for environment: testing
+2025-10-09 15:41:50,590 - VoiceRecorderPro.src.enhanced_audio_recorder - INFO - enhanced_audio_recorder.py:282 - Recording directory: C:\Users\Owner\Voice Recorder\Python-Voice-Recorder\recordings_test\raw
+2025-10-09 15:41:50,591 - services.file_storage.config.storage_config - INFO - storage_config.py:43 - Initializing StorageConfig for environment: testing
+2025-10-09 15:41:50,591 - services.file_storage.config.storage_config - INFO - storage_config.py:73 - StorageConfig initialization completed successfully
+2025-10-09 15:41:50,593 - services.file_storage.config.storage_config - INFO - storage_config.py:43 - Initializing StorageConfig for environment: testing
+2025-10-09 15:41:50,593 - services.file_storage.config.storage_config - INFO - storage_config.py:73 - StorageConfig initialization completed successfully
+2025-10-09 15:41:50,714 - services.file_storage.config.storage_config - INFO - storage_config.py:43 - Initializing StorageConfig for environment: testing
+2025-10-09 15:41:50,714 - services.file_storage.config.storage_config - INFO - storage_config.py:73 - StorageConfig initialization completed successfully
+2025-10-09 15:41:53,876 - VoiceRecorderPro.performance_monitor - WARNING - performance_monitor.py:60 - Slow operation detected: Audio Recording took 3.13s
+2025-10-09 15:41:54,884 - VoiceRecorderPro.services.recording_service - INFO - recording_service.py:82 - RecordingService resolved DATABASE_URL: sqlite:///C:/Users/Owner/Voice Recorder/Python-Voice-Recorder/Python - Voice Recorder/db/app.db
+2025-10-09 15:41:54,884 - VoiceRecorderPro.services.recording_service - INFO - recording_service.py:93 - RecordingService session bind: sqlite:///C:/Users/Owner/Voice Recorder/Python-Voice-Recorder/Python - Voice Recorder/db/app.db
+2025-10-09 15:41:54,884 - VoiceRecorderPro.services.recording_service - INFO - recording_service.py:125 - Created recording 1 (checksum=aeb852048e35be4391685af966e670f32bb52a5064ce93030911a087d7f115f7)
+2025-10-09 15:41:55,113 - cloud.upload_utils - INFO - upload_utils.py:124 - Upload cancelled by caller
+2025-10-09 15:41:55,113 - cloud.upload_utils - ERROR - upload_utils.py:194 - Upload failed (attempt=1): upload_cancelled
+2025-10-09 15:41:55,113 - cloud.upload_utils - ERROR - upload_utils.py:194 - Upload failed (attempt=3): network
+2025-10-09 15:41:55,119 - cloud.upload_utils - INFO - upload_utils.py:124 - Upload cancelled by caller

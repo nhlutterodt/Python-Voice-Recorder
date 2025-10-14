@@ -32,7 +32,7 @@ The `create_clean_release.ps1` script automatically creates a production-ready c
 ## What Gets Included
 
 ### ✅ Core Application Files
-- `enhanced_main.py` - Main application entry
+- `src/entrypoint.py` - Main application entry (module)
 - `audio_recorder.py` - Core recording engine
 - `enhanced_editor.py` - UI components
 - `audio_processing.py` - Audio utilities
@@ -120,7 +120,7 @@ voice-recorder-pro-public/
 ├── LICENSE                      # MIT license
 ├── requirements.txt             # Dependencies
 ├── .gitignore                   # Production gitignore
-├── enhanced_main.py             # Application entry
+├── src/entrypoint.py            # Application entry (module)
 ├── [core application files]     # All essential Python files
 ├── cloud/                       # Cloud integration
 ├── models/                      # Database models

@@ -35,22 +35,27 @@
 
 ## 🚀 Quick Start
 
-### Option 1: Download Executable (Recommended)
+### Option 1: Quick Launch (Recommended)
+1. **Setup** (one-time): Run `.\Python - Voice Recorder\scripts\setup_local_env.ps1`
+2. **Launch**: Navigate to `Python - Voice Recorder` and run `.\Launch_VoiceRecorderPro.bat -dev`
+
+### Option 2: Download Executable  
 1. Download `VoiceRecorderPro.exe` from [Releases](../../releases)
 2. Run the executable - no installation required!
 3. Start recording professional-quality audio
 
-### Option 2: Run from Source
+### Option 3: Manual from Source
 ```bash
-# Clone the repository
+# Clone and setup
 git clone https://github.com/nhlutterodt/Python---Voice-Recorder.git
 cd Python---Voice-Recorder
 
-# Install dependencies
-pip install -r requirements.txt
+# Setup environment
+.\Python - Voice Recorder\scripts\setup_local_env.ps1
 
-# Launch the application
-python enhanced_main.py
+# Launch application
+cd "Python - Voice Recorder"
+.\Launch_VoiceRecorderPro.bat -dev
 ```
 
 ### Optional: Cloud Features
@@ -146,7 +151,7 @@ python scripts/build_voice_recorder_pro.py
 ### Project Structure
 ```
 voice-recorder-pro/
-├── enhanced_main.py          # Main application entry
+├── src/entrypoint.py         # Main application entry (module entrypoint)
 ├── audio_recorder.py         # Core recording engine
 ├── enhanced_editor.py        # Audio editing interface
 ├── audio_processing.py       # Audio processing utilities

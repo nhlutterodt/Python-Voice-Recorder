@@ -1,0 +1,24 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.3.2
+    hooks:
+    - id: detect-aws-credentials
+    - id: detect-private-key
+    - id: detect-secrets
+
+-   repo: https://github.com/Yelp/detect-secrets
+    rev: 1.1.1
+    hooks:
+    - id: detect-secrets
+      args: ["--baseline", ".secrets.baseline"]
+
+-   repo: https://github.com/pre-commit/mirrors-gitlint
+    rev: v0.17.0
+    hooks:
+    - id: gitlint
+
+# Local config: don't block developer local secure folder since it's outside the repo
+exclude: |
+  (?x)^(
+    c:/users/owner/secrets/.*
+  )

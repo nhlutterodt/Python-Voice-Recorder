@@ -1,13 +1,17 @@
+import logging
 import os
 import tempfile
-import logging
-import pytest
 from typing import Any
 
+import pytest
 
-def test_drive_manager_behaviour_when_google_apis_unavailable(monkeypatch: Any, caplog: Any):
+
+def test_drive_manager_behaviour_when_google_apis_unavailable(
+    monkeypatch: Any, caplog: Any
+):
     # Import module and force-disable Google APIs
     import cloud.drive_manager as dm
+
     monkeypatch.setattr(dm, "GOOGLE_APIS_AVAILABLE", False, raising=True)
 
     class StubAuth:
@@ -20,7 +24,9 @@ def test_drive_manager_behaviour_when_google_apis_unavailable(monkeypatch: Any, 
     mgr = dm.GoogleDriveManager(StubAuth())
 
     # _get_service should raise a predictable error
-    with pytest.raises(RuntimeError, match="Google API libraries not available"):
+    from cloud.exceptions import APILibrariesMissingError
+
+    with pytest.raises(APILibrariesMissingError):
         mgr._get_service()  # type: ignore[attr-defined]  # accessing protected for test coverage
 
     # Methods should fail gracefully and return safe defaults
@@ -32,24 +38,31 @@ def test_drive_manager_behaviour_when_google_apis_unavailable(monkeypatch: Any, 
     assert mgr.get_storage_info() == {}
 
     # download/delete -> False
-    assert mgr.download_recording("fake_id", os.path.join(os.getcwd(), "out.dat")) is False
+    assert (
+        mgr.download_recording("fake_id", os.path.join(os.getcwd(), "out.dat")) is False
+    )
     assert mgr.delete_recording("fake_id") is False
 
     # upload_recording -> None, use a real temp file so it passes the exists() check
     fd, path = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     try:
-        assert mgr.upload_recording(path) is None
+        uploader = getattr(mgr, "get_uploader", None)
+        if callable(uploader):
+            # New uploader should raise APILibrariesMissingError when libs disabled
+            with pytest.raises(APILibrariesMissingError):
+                mgr.get_uploader().upload(path)
+        else:
+            assert mgr.upload_recording(path) is None
     finally:
         try:
             os.remove(path)
         except OSError:
             pass
 
-    # Verify expected error logs were emitted
+    # Verify expected error logs were emitted (upload may raise instead of logging)
     messages = [rec.message for rec in caplog.records]
     assert any("Error listing recordings" in m for m in messages)
     assert any("Error getting storage info" in m for m in messages)
     assert any("Download failed" in m for m in messages)
     assert any("Delete failed" in m for m in messages)
-    assert any("Upload failed" in m for m in messages)
