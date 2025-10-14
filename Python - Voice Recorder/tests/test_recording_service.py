@@ -1,5 +1,8 @@
 from services.recording_service import RecordingService
-from voice_recorder.models.database import Base, db_context as app_db_context, engine
+
+from voice_recorder.models.database import Base
+from voice_recorder.models.database import db_context as app_db_context
+from voice_recorder.models.database import engine
 
 
 def test_create_from_file(tmp_path):
