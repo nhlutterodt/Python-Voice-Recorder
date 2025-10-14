@@ -47,6 +47,7 @@ jobs:
   build-windows-exe:
     name: Build Windows executable
     runs-on: windows-latest
+    continue-on-error: true  # Windows build is optional (PortAudio dependency issues)
     steps:
       - uses: actions/checkout@v4
       
@@ -56,6 +57,7 @@ jobs:
           python-version: '3.12'
       
       - name: Install system dependencies
+        continue-on-error: true  # PortAudio may not be available via choco
         run: |
           choco install portaudio -y
       
