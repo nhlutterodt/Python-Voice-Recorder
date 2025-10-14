@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from services.file_storage.config.storage_info import (
     StorageInfoCollector,
     StorageMetrics,
