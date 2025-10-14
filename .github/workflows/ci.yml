@@ -70,6 +70,23 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/Python-Voice-Recorder:${{ github.workspace }}/Python - Voice Recorder
 
+      - name: Run pip-audit (security scan)
+        if: matrix.os == 'ubuntu-latest'
+        continue-on-error: true  # Don't fail CI on vulnerabilities (warnings only)
+        working-directory: Python - Voice Recorder
+        run: |
+          pip install pip-audit
+          pip-audit --desc --format json --output pip-audit-report.json || true
+          pip-audit --desc || true
+
+      - name: Upload security scan results
+        if: matrix.os == 'ubuntu-latest' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-${{ matrix.python-version }}
+          path: Python - Voice Recorder/pip-audit-report.json
+          if-no-files-found: warn
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

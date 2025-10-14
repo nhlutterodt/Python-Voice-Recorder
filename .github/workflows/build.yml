@@ -56,11 +56,6 @@ jobs:
         with:
           python-version: '3.12'
       
-      - name: Install system dependencies
-        continue-on-error: true  # PortAudio may not be available via choco
-        run: |
-          choco install portaudio -y
-      
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
       
@@ -72,10 +67,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
       
+      - name: Install PyAudio from pre-built wheel
+        continue-on-error: true
+        run: |
+          # Try to install PyAudio from pre-built wheel (pipwin or direct)
+          pip install pipwin || pip install PyAudio || echo "PyAudio installation skipped"
+      
       - name: Install package and dependencies
         working-directory: 'Python - Voice Recorder'
         run: |
-          pip install -e .
+          # Install without audio dependencies if they fail
+          pip install -e . || pip install --no-deps -e .
           pip install pyinstaller
       
       - name: Build executable with PyInstaller
