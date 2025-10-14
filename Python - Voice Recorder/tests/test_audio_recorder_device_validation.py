@@ -1,7 +1,6 @@
 import os
 
 import pytest
-
 from audio_recorder import AudioRecorderManager
 
 
