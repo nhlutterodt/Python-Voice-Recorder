@@ -104,14 +104,25 @@ jobs:
           draft: true
           prerelease: ${{ contains(steps.get_tag.outputs.tag, '-alpha') || contains(steps.get_tag.outputs.tag, '-beta') || contains(steps.get_tag.outputs.tag, '-rc') }}
 
+      - name: Find built artifacts
+        id: find_artifacts
+        run: |
+          cd "Python - Voice Recorder/dist"
+          WHEEL_FILE=$(ls voice_recorder-*-py3-none-any.whl)
+          SDIST_FILE=$(ls voice_recorder-*.tar.gz)
+          echo "wheel=$WHEEL_FILE" >> $GITHUB_OUTPUT
+          echo "sdist=$SDIST_FILE" >> $GITHUB_OUTPUT
+          echo "Found wheel: $WHEEL_FILE"
+          echo "Found sdist: $SDIST_FILE"
+
       - name: Upload wheel to release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: Python - Voice Recorder/dist/voice_recorder-${{ steps.get_version.outputs.version }}-py3-none-any.whl
-          asset_name: voice_recorder-${{ steps.get_version.outputs.version }}-py3-none-any.whl
+          asset_path: Python - Voice Recorder/dist/${{ steps.find_artifacts.outputs.wheel }}
+          asset_name: ${{ steps.find_artifacts.outputs.wheel }}
           asset_content_type: application/x-wheel+zip
 
       - name: Upload sdist to release
@@ -120,8 +131,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: Python - Voice Recorder/dist/voice_recorder-${{ steps.get_version.outputs.version }}.tar.gz
-          asset_name: voice_recorder-${{ steps.get_version.outputs.version }}.tar.gz
+          asset_path: Python - Voice Recorder/dist/${{ steps.find_artifacts.outputs.sdist }}
+          asset_name: ${{ steps.find_artifacts.outputs.sdist }}
           asset_content_type: application/gzip
 
       - name: Download Windows executable from build workflow
