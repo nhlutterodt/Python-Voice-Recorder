@@ -110,8 +110,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: Python - Voice Recorder/dist/voice_recorder_pro-${{ steps.get_version.outputs.version }}-py3-none-any.whl
-          asset_name: voice_recorder_pro-${{ steps.get_version.outputs.version }}-py3-none-any.whl
+          asset_path: Python - Voice Recorder/dist/voice_recorder-${{ steps.get_version.outputs.version }}-py3-none-any.whl
+          asset_name: voice_recorder-${{ steps.get_version.outputs.version }}-py3-none-any.whl
           asset_content_type: application/x-wheel+zip
 
       - name: Upload sdist to release
@@ -120,8 +120,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: Python - Voice Recorder/dist/voice_recorder_pro-${{ steps.get_version.outputs.version }}.tar.gz
-          asset_name: voice_recorder_pro-${{ steps.get_version.outputs.version }}.tar.gz
+          asset_path: Python - Voice Recorder/dist/voice_recorder-${{ steps.get_version.outputs.version }}.tar.gz
+          asset_name: voice_recorder-${{ steps.get_version.outputs.version }}.tar.gz
           asset_content_type: application/gzip
 
       - name: Download Windows executable from build workflow
