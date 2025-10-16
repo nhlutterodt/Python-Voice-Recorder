@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voice-recorder"
-version = "0.0.0"
-description = "Voice Recorder Pro (local editable install for development)"
+version = "2.1.0"
+description = "Voice Recorder Pro - Professional audio recording and editing with cloud backup"
 requires-python = ">=3.10"
 dependencies = [
     "PySide6>=6.7.2",
