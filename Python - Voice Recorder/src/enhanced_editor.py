@@ -894,10 +894,27 @@ class EnhancedAudioEditor(QWidget):
             pass
 
     def on_load_error(self, error_message: str):
-        """Handle audio loading errors"""
+        """Handle audio loading errors with helpful recovery suggestions"""
         try:
+            # Create a detailed error message with recovery options
+            detailed_message = error_message
+            
+            # Add helpful suggestions based on the error
+            if "FFmpeg" in error_message or "codec" in error_message.lower():
+                detailed_message += "\n\n💡 Suggestions:\n"
+                detailed_message += "• The audio file may be corrupted or in an unsupported format\n"
+                detailed_message += "• Try converting it with FFmpeg:\n"
+                detailed_message += "  ffmpeg -i input.wav -acodec pcm_s16le -ar 44100 output.wav\n"
+                detailed_message += "• Or use the Audio Repair Tool:\n"
+                detailed_message += "  python tools/audio_repair.py <file.wav>"
+            elif "not found" in error_message.lower():
+                detailed_message += "\n\n💡 Suggestions:\n"
+                detailed_message += "• The audio file could not be found\n"
+                detailed_message += "• Check that the file path is correct\n"
+                detailed_message += "• Ensure the file has not been moved or deleted"
+            
             QMessageBox.critical(
-                self, "Loading Error", f"Failed to load audio file:\n{error_message}"
+                self, "Loading Error", detailed_message
             )
         except Exception:
             pass

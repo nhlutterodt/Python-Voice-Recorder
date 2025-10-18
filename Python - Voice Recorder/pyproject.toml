@@ -22,5 +22,5 @@ dependencies = [
     "google-api-python-client>=2.151.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools]
+packages = ["voice_recorder", "cloud", "core", "models", "services", "repositories", "tools", "scripts"]

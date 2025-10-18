@@ -32,7 +32,7 @@ class AudioLoaderThread(QThread):
         self.file_path = file_path
 
     def run(self):
-        """Load audio file in background thread"""
+        """Load audio file in background thread with robust codec support"""
         try:
             self.progress_updated.emit(10, "Opening audio file...")
 
@@ -49,8 +49,50 @@ class AudioLoaderThread(QThread):
             except Exception as _e:
                 raise ImportError(f"pydub.AudioSegment not available: {_e}")
 
-            # Load audio segment with pydub
-            audio_segment = cast("AudioSegment", AudioSegment.from_wav(self.file_path))
+            # Try multiple loading strategies for robustness
+            audio_segment = None
+            errors = []
+            
+            # Strategy 1: Try WAV with pydub's built-in handler
+            try:
+                self.progress_updated.emit(35, "Loading WAV format...")
+                audio_segment = cast("AudioSegment", AudioSegment.from_wav(self.file_path))
+            except Exception as e:
+                errors.append(f"WAV loader failed: {e}")
+                logger.debug(f"WAV loading attempt failed: {e}")
+            
+            # Strategy 2: If WAV failed, try generic format detection
+            if audio_segment is None:
+                try:
+                    self.progress_updated.emit(40, "Auto-detecting audio format...")
+                    # Let pydub auto-detect the format
+                    audio_segment = cast("AudioSegment", AudioSegment.from_file(self.file_path))
+                except Exception as e:
+                    errors.append(f"Auto-detect failed: {e}")
+                    logger.debug(f"Auto-detect loading attempt failed: {e}")
+            
+            # Strategy 3: If both failed, try to re-encode using ffmpeg
+            if audio_segment is None:
+                try:
+                    self.progress_updated.emit(45, "Re-encoding audio file...")
+                    # Try loading with explicit format specification
+                    audio_segment = cast(
+                        "AudioSegment", 
+                        AudioSegment.from_file(self.file_path, format="wav")
+                    )
+                except Exception as e:
+                    errors.append(f"Re-encode attempt failed: {e}")
+                    logger.debug(f"Re-encode loading attempt failed: {e}")
+            
+            if audio_segment is None:
+                # All strategies failed, provide detailed error
+                error_msg = "Failed to load audio file. Attempted strategies:\n"
+                for err in errors:
+                    error_msg += f"  • {err}\n"
+                error_msg += f"\nFile: {self.file_path}\n"
+                error_msg += "The file may be corrupted or in an unsupported format.\n"
+                error_msg += "Try converting it with: ffmpeg -i input.wav -acodec pcm_s16le -ar 44100 output.wav"
+                raise RuntimeError(error_msg)
 
             self.progress_updated.emit(70, "Processing audio metadata...")
 
