@@ -1,0 +1,83 @@
+{
+  "test.convenience_metric": {
+    "metric_name": "test.convenience_metric",
+    "median": 100.0,
+    "mad": 0.0,
+    "mean": 100.0,
+    "std_dev": 0.0,
+    "percentiles": {
+      "50": 100.0,
+      "95": 100.0,
+      "99": 100.0
+    },
+    "data_points": 50,
+    "window_start": "2025-10-18T09:28:49.409630",
+    "window_end": "2025-10-18T10:28:49.409630",
+    "calculated_at": "2025-10-18T10:28:49.410636",
+    "config": {
+      "threshold_multiplier": 3.0,
+      "min_data_points": 30,
+      "percentiles": [
+        50,
+        95,
+        99
+      ],
+      "alert_on_increase": true,
+      "alert_on_decrease": false
+    }
+  },
+  "test.deviation_check": {
+    "metric_name": "test.deviation_check",
+    "median": 100.0,
+    "mad": 0.0,
+    "mean": 100.0,
+    "std_dev": 0.0,
+    "percentiles": {
+      "50": 100.0,
+      "95": 100.0,
+      "99": 100.0
+    },
+    "data_points": 50,
+    "window_start": "2025-10-17T09:33:43.324454",
+    "window_end": "2025-10-18T09:33:43.324454",
+    "calculated_at": "2025-10-18T09:33:43.325454",
+    "config": {
+      "threshold_multiplier": 3.0,
+      "min_data_points": 30,
+      "percentiles": [
+        50,
+        95,
+        99
+      ],
+      "alert_on_increase": true,
+      "alert_on_decrease": false
+    }
+  },
+  "test.metric": {
+    "metric_name": "test.metric",
+    "median": 145.0,
+    "mad": 25.0,
+    "mean": 145.0,
+    "std_dev": 28.96520413957854,
+    "percentiles": {
+      "50": 150.0,
+      "95": 190.0,
+      "99": 190.0
+    },
+    "data_points": 60,
+    "window_start": "2025-10-17T10:28:49.433266",
+    "window_end": "2025-10-18T10:28:49.433266",
+    "calculated_at": "2025-10-18T10:28:49.433266",
+    "config": {
+      "threshold_multiplier": 3.0,
+      "min_data_points": 30,
+      "percentiles": [
+        50,
+        95,
+        99
+      ],
+      "alert_on_increase": true,
+      "alert_on_decrease": false
+    }
+  }
+}

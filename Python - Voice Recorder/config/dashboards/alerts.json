@@ -1,0 +1,43 @@
+{
+  "title": "Alert Monitoring",
+  "description": "System alerts and deviation warnings",
+  "widgets": [
+    {
+      "widget_type": "alert",
+      "label": "Critical Alerts",
+      "severity_filter": ["CRITICAL"],
+      "limit": 10
+    },
+    {
+      "widget_type": "alert",
+      "label": "Warnings",
+      "severity_filter": ["WARNING"],
+      "limit": 10
+    },
+    {
+      "widget_type": "summary",
+      "label": "Alert Summary (24h)",
+      "window_hours": 24,
+      "extra": {
+        "metrics": [
+          {"name": "alerts.critical", "agg": "count"},
+          {"name": "alerts.warning", "agg": "count"},
+          {"name": "alerts.info", "agg": "count"}
+        ]
+      }
+    },
+    {
+      "widget_type": "chart",
+      "metric_name": "alerts.total",
+      "label": "Alert Frequency (7 days)",
+      "chart_type": "sparkline",
+      "window_hours": 168
+    },
+    {
+      "widget_type": "baseline",
+      "metric_name": "errors.rate",
+      "label": "Error Rate vs Baseline",
+      "window_hours": 168
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "title": "System Overview",
+  "description": "General system metrics and health status",
+  "widgets": [
+    {
+      "widget_type": "summary",
+      "label": "Recording Statistics (24h)",
+      "window_hours": 24,
+      "extra": {
+        "metrics": [
+          {"name": "recording.count", "agg": "count"},
+          {"name": "recording.duration", "agg": "sum"},
+          {"name": "recording.size", "agg": "sum"}
+        ]
+      }
+    },
+    {
+      "widget_type": "metric",
+      "metric_name": "recording.count",
+      "label": "Total Recordings",
+      "format": "number",
+      "show_trend": true,
+      "window_hours": 168
+    },
+    {
+      "widget_type": "metric",
+      "metric_name": "system.uptime",
+      "label": "System Uptime",
+      "format": "duration",
+      "window_hours": 1
+    },
+    {
+      "widget_type": "chart",
+      "metric_name": "recording.count",
+      "label": "Recording Activity (7 days)",
+      "chart_type": "sparkline",
+      "window_hours": 168
+    },
+    {
+      "widget_type": "alert",
+      "label": "Recent Alerts",
+      "severity_filter": ["WARNING", "CRITICAL"],
+      "limit": 5
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+name: CI (encoding-aware)
+
+on: [push, pull_request]
+
+jobs:
+  test-utf8:
+    name: Test (UTF-8 environment)
+    runs-on: ubuntu-latest
+    env:
+      PYTHONIOENCODING: utf-8
+      LANG: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: pip install -r "Python - Voice Recorder/requirements_dev.txt"
+      - name: Run tests
+        working-directory: 'Python - Voice Recorder'
+        run: python -m pytest -q
+
+  legacy-windows-encoding:
+    name: Legacy Windows encoding check
+    runs-on: windows-latest
+    env:
+      PYTHONIOENCODING: cp1252
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: pip install -r "Python - Voice Recorder/requirements_dev.txt"
+      - name: Run CLI encoding tests
+        working-directory: 'Python - Voice Recorder'
+        run: python -m pytest tests/test_dashboard_cli_encoding.py -q
