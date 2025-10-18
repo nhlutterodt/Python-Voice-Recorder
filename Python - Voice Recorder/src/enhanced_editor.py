@@ -894,30 +894,24 @@ class EnhancedAudioEditor(QWidget):
             pass
 
     def on_load_error(self, error_message: str):
-        """Handle audio loading errors with helpful recovery suggestions"""
+        """Handle audio loading errors"""
         try:
-            # Create a detailed error message with recovery options
-            detailed_message = error_message
+            # Build error message with recovery suggestions
+            msg = "Failed to load audio file:\n\n" + error_message
             
-            # Add helpful suggestions based on the error
             if "FFmpeg" in error_message or "codec" in error_message.lower():
-                detailed_message += "\n\n💡 Suggestions:\n"
-                detailed_message += "• The audio file may be corrupted or in an unsupported format\n"
-                detailed_message += "• Try converting it with FFmpeg:\n"
-                detailed_message += "  ffmpeg -i input.wav -acodec pcm_s16le -ar 44100 output.wav\n"
-                detailed_message += "• Or use the Audio Repair Tool:\n"
-                detailed_message += "  python tools/audio_repair.py <file.wav>"
-            elif "not found" in error_message.lower():
-                detailed_message += "\n\n💡 Suggestions:\n"
-                detailed_message += "• The audio file could not be found\n"
-                detailed_message += "• Check that the file path is correct\n"
-                detailed_message += "• Ensure the file has not been moved or deleted"
+                msg += "\n\nSuggestion: The file may be corrupted. Try repairing with:"
+                msg += "\n  ffmpeg -i input.wav -acodec pcm_s16le -ar 44100 output.wav"
+                msg += "\n\nOr use the audio repair tool:"
+                msg += "\n  python tools/audio_repair.py <file.wav>"
             
-            QMessageBox.critical(
-                self, "Loading Error", detailed_message
-            )
-        except Exception:
-            pass
+            QMessageBox.critical(self, "Loading Error", msg)
+        except Exception as e:
+            # Fallback: just show basic error if message box fails
+            import sys
+            print(f"Error displaying message box: {e}", file=sys.stderr)
+            print(f"Original error: {error_message}", file=sys.stderr)
+        
         if self.status_label is not None:
             try:
                 self.status_label.setText("Failed to load audio file.")

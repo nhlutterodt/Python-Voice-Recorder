@@ -31,6 +31,35 @@ class AudioLoaderThread(QThread):
         super().__init__()
         self.file_path = file_path
 
+    def _repair_wav_file(self) -> dict | None:
+        """Attempt to repair a corrupt WAV file using Python's wave module.
+        
+        Returns a dict with keys: data, sample_width, frame_rate, channels
+        or None if repair fails.
+        """
+        try:
+            with wave.open(self.file_path, "rb") as wav_file:
+                # Get WAV parameters
+                n_channels = wav_file.getnchannels()
+                sample_width = wav_file.getsampwidth()
+                frame_rate = wav_file.getframerate()
+                
+                # Read all frames
+                frames = wav_file.readframes(wav_file.getnframes())
+                
+                if not frames:
+                    return None
+                
+                return {
+                    "data": frames,
+                    "sample_width": sample_width,
+                    "frame_rate": frame_rate,
+                    "channels": n_channels,
+                }
+        except Exception as e:
+            logger.debug(f"WAV repair with wave module failed: {e}")
+            return None
+
     def run(self):
         """Load audio file in background thread with robust codec support"""
         try:
@@ -84,14 +113,37 @@ class AudioLoaderThread(QThread):
                     errors.append(f"Re-encode attempt failed: {e}")
                     logger.debug(f"Re-encode loading attempt failed: {e}")
             
+            # Strategy 4: If all else fails, try to repair WAV with wave module
+            if audio_segment is None:
+                try:
+                    self.progress_updated.emit(50, "Attempting WAV repair with Python wave module...")
+                    # Try to read raw PCM data directly with Python's wave module
+                    wav_data = self._repair_wav_file()
+                    if wav_data:
+                        from pydub import AudioSegment  # type: ignore
+                        audio_segment = cast(
+                            "AudioSegment",
+                            AudioSegment(
+                                data=wav_data["data"],
+                                sample_width=wav_data["sample_width"],
+                                frame_rate=wav_data["frame_rate"],
+                                channels=wav_data["channels"],
+                            ),
+                        )
+                except Exception as e:
+                    errors.append(f"WAV repair attempt failed: {e}")
+                    logger.debug(f"WAV repair loading attempt failed: {e}")
+            
             if audio_segment is None:
                 # All strategies failed, provide detailed error
-                error_msg = "Failed to load audio file. Attempted strategies:\n"
-                for err in errors:
-                    error_msg += f"  • {err}\n"
-                error_msg += f"\nFile: {self.file_path}\n"
-                error_msg += "The file may be corrupted or in an unsupported format.\n"
-                error_msg += "Try converting it with: ffmpeg -i input.wav -acodec pcm_s16le -ar 44100 output.wav"
+                error_msg = "Failed to load audio file.\n\n"
+                error_msg += "The file appears to be corrupted or in an unsupported format.\n\n"
+                error_msg += "RECOVERY OPTIONS:\n"
+                error_msg += "1. Use the Audio Repair Tool:\n"
+                error_msg += "   python tools/audio_repair.py \"" + self.file_path + "\"\n\n"
+                error_msg += "2. Convert with FFmpeg:\n"
+                error_msg += "   ffmpeg -i \"" + self.file_path + "\" -acodec pcm_s16le -ar 44100 output.wav\n\n"
+                error_msg += "3. If the file is severely corrupted, it may not be recoverable."
                 raise RuntimeError(error_msg)
 
             self.progress_updated.emit(70, "Processing audio metadata...")
