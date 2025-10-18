@@ -15,15 +15,12 @@
 ## ✨ Features
 
 ### 🎯 Core Recording
-- **High-Quality Audio Recording** - Professional-grade audio capture
-- **Real-Time Waveform Visualization** - Live audio feedback during recording
-- **Multiple Audio Formats** - WAV, MP3, OGG support
-- **Performance Monitoring** - Real-time system performance tracking
 
-### ✂️ Advanced Editing
+Day 4: Metrics & Dashboard
+
+This release adds a config-driven dashboard system and metrics collection for operational insight. Dashboards are disabled by default; see `docs/TASK20_DAY4_COMPLETE.md` for enablement, security notes, and examples. Additional developer-facing docs are available under `docs/dashboard/`.
+
 - **Visual Audio Editor** - Intuitive waveform-based editing
-- **Precise Cut/Trim Tools** - Frame-accurate audio editing
-- **Quality Preview** - Real-time playback during editing
 - **Export Options** - Multiple format and quality options
 
 ### ☁️ Cloud Integration

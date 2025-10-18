@@ -1,0 +1,53 @@
+{
+  "title": "Performance Monitoring",
+  "description": "System performance metrics and resource usage",
+  "widgets": [
+    {
+      "widget_type": "baseline",
+      "metric_name": "cpu.usage",
+      "label": "CPU Usage vs Baseline",
+      "window_hours": 168
+    },
+    {
+      "widget_type": "baseline",
+      "metric_name": "memory.usage",
+      "label": "Memory Usage vs Baseline",
+      "window_hours": 168
+    },
+    {
+      "widget_type": "chart",
+      "metric_name": "cpu.usage",
+      "label": "CPU Usage Trend (24h)",
+      "chart_type": "sparkline",
+      "window_hours": 24
+    },
+    {
+      "widget_type": "chart",
+      "metric_name": "memory.usage",
+      "label": "Memory Usage Trend (24h)",
+      "chart_type": "sparkline",
+      "window_hours": 24
+    },
+    {
+      "widget_type": "summary",
+      "label": "Performance Summary (24h)",
+      "window_hours": 24,
+      "extra": {
+        "metrics": [
+          {"name": "cpu.usage", "agg": "avg"},
+          {"name": "cpu.usage", "agg": "max"},
+          {"name": "memory.usage", "agg": "avg"},
+          {"name": "memory.usage", "agg": "max"}
+        ]
+      }
+    },
+    {
+      "widget_type": "metric",
+      "metric_name": "recording.processing_time",
+      "label": "Avg Processing Time",
+      "format": "duration",
+      "show_trend": true,
+      "window_hours": 24
+    }
+  ]
+}
