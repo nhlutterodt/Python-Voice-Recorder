@@ -24,7 +24,7 @@ def _resolve_default_db() -> Optional[str]:
     can trigger DB access or other side effects in test environments.
     """
     try:
-        from voice_recorder.models import database as _app_db  # type: ignore
+        from models import database as _app_db  # type: ignore
 
         if isinstance(_app_db.DATABASE_URL, str) and _app_db.DATABASE_URL.startswith(
             "sqlite:///"

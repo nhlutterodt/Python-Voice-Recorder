@@ -7,9 +7,9 @@ def test_google_uploader_raises_on_duplicate(monkeypatch, tmp_path):
     # Force compute_content_sha256 to return a deterministic value
     from unittest.mock import Mock, patch
 
-    # Patch the import path used by google_uploader
+    # Patch the import path used by google_uploader (now uses local cloud.dedupe)
     with patch(
-        "voice_recorder.cloud.dedupe.compute_content_sha256", return_value="deadbeef"
+        "cloud.dedupe.compute_content_sha256", return_value="deadbeef"
     ):
 
         class FakeManager:

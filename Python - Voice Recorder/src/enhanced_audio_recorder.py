@@ -64,8 +64,34 @@ class EnhancedAudioRecorderManager:
         self.recorder_thread: Optional[AudioRecorderThread] = None
         self.level_monitor: Optional[AudioLevelMonitor] = None
         self.is_recording = False
-        self.output_directory = "recordings/raw"
+        # Prefer creating a StorageConfig for the requested environment so
+        # integration tests can exercise storage-related behaviours. Import
+        # lazily to avoid import-time side-effects in environments where the
+        # full app package isn't available.
         self.storage_config = None
+        try:
+            try:
+                from voice_recorder.services.file_storage.config import (
+                    StorageConfig,
+                )
+
+            except Exception:
+                # Allow non-package import paths (test scripts sometimes use
+                # direct import from project root).
+                from services.file_storage.config import StorageConfig
+
+            self.storage_config = StorageConfig.from_environment(self.environment)
+            # Expose a sensible output directory for other code/tests
+            try:
+                self.output_directory = str(
+                    self.storage_config.get_path_for_type("raw")
+                )
+            except Exception:
+                self.output_directory = "recordings/raw"
+        except Exception:
+            # Running in minimal test environments; keep fallbacks
+            self.storage_config = None
+            self.output_directory = "recordings/raw"
 
     def _ensure_runtime_dependencies(self) -> None:
         # Import heavy modules at runtime using importlib to avoid import-time
@@ -139,6 +165,28 @@ class EnhancedAudioRecorderManager:
             return input_devices
         except Exception:
             return []
+
+    def get_storage_info(self) -> Dict[str, Any]:
+        """Return storage information for the current environment.
+
+        Tests expect a dict that includes an "environment" key.
+        """
+        if self.storage_config:
+            try:
+                info = self.storage_config.get_storage_info()
+                if isinstance(info, dict):
+                    info.setdefault("environment", self.storage_config.environment)
+                    # add a convenience flag for enhanced features
+                    info.setdefault(
+                        "enhanced_features",
+                        hasattr(self.storage_config, "get_enhanced_path_info"),
+                    )
+                    return info
+            except Exception:
+                pass
+
+        # Minimal fallback info when StorageConfig is unavailable
+        return {"environment": self.environment, "enhanced_features": False}
 
 
 # Maintain backward compatible alias

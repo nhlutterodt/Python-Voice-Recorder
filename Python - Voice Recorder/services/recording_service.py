@@ -13,7 +13,7 @@ from voice_recorder.core.database_context import DBContextProtocol
 
 if TYPE_CHECKING:
     # Type hints only; avoid importing models at module import time
-    from voice_recorder.models.recording import Recording  # type: ignore
+    from models.recording import Recording  # type: ignore
 
 logger = get_logger(__name__)
 
@@ -50,7 +50,7 @@ class RecordingService:
         if db_ctx is None:
             # lazy import to avoid SQLAlchemy metadata registration at module import time
             try:
-                from voice_recorder.models.database import db_context as _db_context  # type: ignore
+                from models.database import db_context as _db_context  # type: ignore
             except Exception:
                 _db_context = None
             self.db_context: DBContextProtocol = _db_context
@@ -123,7 +123,7 @@ class RecordingService:
 
             repo = RecordingRepository(session)
             # Lazily import Recording model to avoid mapping registration at import time
-            from voice_recorder.models.recording import Recording as _Recording
+            from models.recording import Recording as _Recording
 
             rec = _Recording(
                 filename=src.name,

@@ -43,7 +43,7 @@ try:
     from voice_recorder.core.database_health import DatabaseHealthMonitor
     from voice_recorder.core.logging_config import logger
     try:
-        from voice_recorder.models.recording import Recording
+        from models.recording import Recording
     except Exception:
         Recording = None
 except ImportError:

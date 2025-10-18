@@ -1167,8 +1167,8 @@ class EnhancedAudioEditor(QWidget):
         errors during import-only validation runs).
         """
         try:
-            from voice_recorder.models.database import SessionLocal as _SessionLocal
-            from voice_recorder.models.recording import Recording as _Recording
+            from models.database import SessionLocal as _SessionLocal
+            from models.recording import Recording as _Recording
         except Exception as e:
             # DB/models unavailable in this environment (e.g., limited test runner)
             print(f"⚠️ DB models unavailable, skipping metadata save: {e}")

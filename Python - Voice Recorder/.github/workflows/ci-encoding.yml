@@ -3,23 +3,45 @@ name: CI (encoding-aware)
 on: [push, pull_request]
 
 jobs:
-  test-utf8:
-    name: Test (UTF-8 environment)
+  test-matrix:
+    name: Test matrix (UTF-8)
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.10, 3.11, 3.12]
     env:
       PYTHONIOENCODING: utf-8
       LANG: C.UTF-8
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
+
       - name: Install deps
         run: pip install -r "Python - Voice Recorder/requirements_dev.txt"
-      - name: Run tests
+
+      - name: Run tests with coverage
         working-directory: 'Python - Voice Recorder'
-        run: python -m pytest -q
+        run: |
+          python -m pytest --maxfail=1 --quiet --cov=.
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.python-version }}
+          path: Python - Voice Recorder/htmlcov || ''
 
   legacy-windows-encoding:
     name: Legacy Windows encoding check
@@ -28,12 +50,23 @@ jobs:
       PYTHONIOENCODING: cp1252
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache pip (Windows)
+        uses: actions/cache@v4
+        with:
+          path: C:\\Users\\runneradmin\\AppData\\Local\\pip\
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
+
       - name: Install deps
         run: pip install -r "Python - Voice Recorder/requirements_dev.txt"
-      - name: Run CLI encoding tests
+
+      - name: Run CLI encoding tests (legacy encoding)
         working-directory: 'Python - Voice Recorder'
         run: python -m pytest tests/test_dashboard_cli_encoding.py -q

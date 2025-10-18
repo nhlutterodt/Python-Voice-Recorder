@@ -15,9 +15,9 @@ from enum import Enum
 from sqlalchemy import text
 import psutil
 
-from voice_recorder.models.database import engine, DATABASE_URL
-from voice_recorder.core import database_context
-from voice_recorder.core.logging_config import get_logger
+from models.database import engine, DATABASE_URL
+from core import database_context
+from core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -631,7 +631,7 @@ class DatabaseHealthMonitor:
                 
                 # Check if main tables exist (assuming Recording table)
                 try:
-                    from voice_recorder.models.recording import Recording
+                    from models.recording import Recording
                     session.query(Recording).first()
                     results["checks"].append({
                         "name": "table_accessibility",

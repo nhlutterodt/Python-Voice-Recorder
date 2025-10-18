@@ -469,8 +469,11 @@ class TestDashboard:
 class TestAccessControl:
     """Test dashboard access control"""
     
-    def test_access_control_default_deny(self, tmp_path):
+    def test_access_control_default_deny(self, tmp_path, monkeypatch):
         """Test access control defaults to DENY"""
+        # Clear the VRP_ADMIN_MODE env var that might be set during development
+        monkeypatch.delenv("VRP_ADMIN_MODE", raising=False)
+        
         config_file = tmp_path / "settings.json"
         config_file.write_text("{}")
         
@@ -487,8 +490,11 @@ class TestAccessControl:
         
         assert access.is_enabled()
     
-    def test_access_control_check_access(self, tmp_path):
+    def test_access_control_check_access(self, tmp_path, monkeypatch):
         """Test access check with reason"""
+        # Clear the VRP_ADMIN_MODE env var that might be set during development
+        monkeypatch.delenv("VRP_ADMIN_MODE", raising=False)
+        
         config_file = tmp_path / "settings.json"
         config_file.write_text("{}")
         

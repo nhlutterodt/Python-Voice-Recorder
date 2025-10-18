@@ -619,7 +619,7 @@ class AudioRecorderManager(QObject):
         if not has_qt_app and RecordingService is not None:
             try:
                 # inject the app db_context so the service uses the same DB as the app
-                from voice_recorder.models.database import db_context as app_db_context
+                from models.database import db_context as app_db_context
 
                 svc = RecordingService(db_ctx=app_db_context)
                 svc.create_from_file(file_path)

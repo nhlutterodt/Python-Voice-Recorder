@@ -47,7 +47,12 @@ class GoogleDriveUploader(Uploader):
             # (unless caller explicitly forces upload). Any auth/library errors
             # should surface from the manager's helpers.
             try:
-                from voice_recorder.cloud.dedupe import compute_content_sha256
+                # Import the local package path so tests that monkeypatch
+                # `cloud.dedupe.compute_content_sha256` will affect the
+                # function used here. Historically the project used a
+                # top-level shim `voice_recorder.cloud.*` which prevented
+                # test patches from reaching this import.
+                from cloud.dedupe import compute_content_sha256
 
                 ch = compute_content_sha256(file_path)
                 if ch:

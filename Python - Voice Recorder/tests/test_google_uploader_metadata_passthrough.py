@@ -70,8 +70,9 @@ def test_google_uploader_passes_metadata(tmp_path):
     # stub compute_content_sha256 so the uploader includes it
     from unittest.mock import patch
 
+    # Patch using the local cloud.dedupe path (as uploader now imports from there)
     with patch(
-        "voice_recorder.cloud.dedupe.compute_content_sha256", return_value="deadbeef"
+        "cloud.dedupe.compute_content_sha256", return_value="deadbeef"
     ):
         res = uploader.upload(
             str(p),

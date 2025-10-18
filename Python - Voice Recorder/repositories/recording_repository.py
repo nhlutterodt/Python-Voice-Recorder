@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 if TYPE_CHECKING:
     # Only import for type checkers; at runtime we import the model lazily
-    from voice_recorder.models.recording import Recording  # type: ignore
+    from models.recording import Recording  # type: ignore
 
 
 class RecordingRepository:
@@ -18,14 +18,24 @@ class RecordingRepository:
         return recording
 
     def get(self, recording_id: int) -> Optional["Recording"]:
-        from voice_recorder.models.recording import Recording as _Recording
+        from models.recording import Recording as _Recording
 
-        return self.session.query(_Recording).filter(_Recording.id == recording_id).one_or_none()
+        return (
+            self.session.query(_Recording)
+            .filter(_Recording.id == recording_id)
+            .one_or_none()
+        )
 
     def list(self, limit: int = 100, offset: int = 0):
-        from voice_recorder.models.recording import Recording as _Recording
+        from models.recording import Recording as _Recording
 
-        return self.session.query(_Recording).order_by(_Recording.created_at.desc()).offset(offset).limit(limit).all()
+        return (
+            self.session.query(_Recording)
+            .order_by(_Recording.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
     def delete(self, recording: "Recording", soft: bool = True) -> bool:
         if soft:
