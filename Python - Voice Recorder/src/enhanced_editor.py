@@ -2,9 +2,9 @@
 # Enhanced audio editor with asynchronous operations, performance improvements, and cloud integration
 
 import os
-from typing import TYPE_CHECKING, Any, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, cast
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QUrl, QThread, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
@@ -28,6 +28,10 @@ from voice_recorder.audio_processing import (  # type: ignore
 from voice_recorder.audio_recorder import AudioRecorderManager
 from voice_recorder.config_manager import config_manager
 from voice_recorder.waveform_viewer import WaveformViewer
+from voice_recorder.services.audio_repair_service import AudioRepairService  # type: ignore
+
+# Import QThread for async repair
+from PySide6.QtCore import QThread, Signal
 
 if TYPE_CHECKING:
     # For type-checkers only; import AudioSegment for annotations and
@@ -49,6 +53,31 @@ logger = get_logger(__name__)
 
 # Cloud integration (optional import to handle missing dependencies gracefully)
 _cloud_available = False
+
+
+class AudioRepairThread(QThread):
+    """Worker thread for audio repair to prevent UI blocking"""
+    repair_completed = Signal(dict)  # success, error, output_path
+    
+    def __init__(self, input_path: str, output_path: str):
+        super().__init__()
+        self.input_path = input_path
+        self.output_path = output_path
+    
+    def run(self):
+        """Execute repair in background thread"""
+        try:
+            result = AudioRepairService.repair_audio_file(
+                input_path=self.input_path,
+                output_path=self.output_path,
+                force=True
+            )
+            self.repair_completed.emit(result)
+        except Exception as e:
+            self.repair_completed.emit({
+                "success": False,
+                "error": str(e)
+            })
 try:
     from voice_recorder.cloud.auth_manager import GoogleAuthManager
     from voice_recorder.cloud.cloud_ui import CloudUI
@@ -79,6 +108,7 @@ class EnhancedAudioEditor(QWidget):
         self.setMinimumHeight(600)
         # Audio-related attributes
         self.audio_file: Optional[str] = None
+        self._current_loading_file: Optional[str] = None  # Track file being loaded for repair
         # Use a forward-reference for runtime safety (AudioSegment is
         # only imported inside functions at runtime when needed)
         self.audio_segment: Optional["AudioSegment"] = None
@@ -113,6 +143,8 @@ class EnhancedAudioEditor(QWidget):
         self.loader_thread: Any = None
         self.trim_processor: Any = None
         self.progress_dialog: Any = None
+        self.repair_thread: Optional[AudioRepairThread] = None  # Audio repair worker thread
+        self.repair_progress: Optional[QMessageBox] = None  # Repair progress dialog
 
         # UI state
         self.is_loading: bool = False
@@ -285,6 +317,21 @@ class EnhancedAudioEditor(QWidget):
                     "Saved preferences but failed to reinitialize cloud features.",
                 )
 
+    def open_audio_repair_tool(self) -> None:
+        """Open the dedicated audio repair tool widget"""
+        try:
+            from voice_recorder.audio_repair_widget import AudioRepairWidget  # type: ignore
+            
+            repair_dialog = AudioRepairWidget(parent=self)
+            repair_dialog.exec()
+        except Exception as e:
+            logger.error(f"Failed to open audio repair tool: {e}")
+            QMessageBox.critical(
+                self,
+                "Audio Repair Tool Error",
+                f"Failed to open audio repair tool:\n\n{str(e)}"
+            )
+
     def create_tabbed_interface(self, main_layout: QVBoxLayout) -> None:
         """Create tabbed interface with cloud features"""
         tab_widget = QTabWidget()
@@ -395,11 +442,34 @@ class EnhancedAudioEditor(QWidget):
         )
         self.load_button.clicked.connect(self.load_audio_async)
 
+        # Audio Repair Tool button
+        repair_button = QPushButton("🔧 Audio Repair Tool")
+        repair_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #e67e22;
+                color: white;
+                border: none;
+                padding: 10px;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #d35400;
+            }
+            QPushButton:disabled {
+                background-color: #bdc3c7;
+            }
+        """
+        )
+        repair_button.clicked.connect(self.open_audio_repair_tool)
+
         # File info label
         self.file_info_label = QLabel(UIConstants.NO_FILE_LOADED)
         self.file_info_label.setStyleSheet("color: #34495e; margin: 5px;")
 
         layout.addWidget(self.load_button)
+        layout.addWidget(repair_button)
         layout.addWidget(self.file_info_label)
 
         # Waveform viewer placeholder
@@ -645,6 +715,9 @@ class EnhancedAudioEditor(QWidget):
 
         if not file_path:
             return
+
+        # Store current file path for error handling (repair & retry)
+        self._current_loading_file = file_path
 
         # Start async loading
         self.is_loading = True
@@ -894,18 +967,36 @@ class EnhancedAudioEditor(QWidget):
             pass
 
     def on_load_error(self, error_message: str):
-        """Handle audio loading errors"""
+        """Handle audio loading errors with repair option"""
         try:
             # Build error message with recovery suggestions
             msg = "Failed to load audio file:\n\n" + error_message
             
-            if "FFmpeg" in error_message or "codec" in error_message.lower():
-                msg += "\n\nSuggestion: The file may be corrupted. Try repairing with:"
-                msg += "\n  ffmpeg -i input.wav -acodec pcm_s16le -ar 44100 output.wav"
-                msg += "\n\nOr use the audio repair tool:"
-                msg += "\n  python tools/audio_repair.py <file.wav>"
+            # Create custom dialog with repair button
+            dialog = QMessageBox(self)
+            dialog.setWindowTitle("Loading Error")
+            dialog.setIcon(QMessageBox.Critical)
+            dialog.setText(msg)
             
-            QMessageBox.critical(self, "Loading Error", msg)
+            # Add buttons
+            dialog.addButton(QMessageBox.Close)
+            
+            # Check if we can attempt repair (only for audio codec errors)
+            can_repair = (
+                hasattr(self, "_current_loading_file") 
+                and self._current_loading_file
+                and ("FFmpeg" in error_message or "codec" in error_message.lower())
+            )
+            
+            if can_repair:
+                repair_button = dialog.addButton("Repair & Retry", QMessageBox.ActionRole)
+                repair_button.clicked.connect(
+                    lambda: self._handle_repair_and_retry(error_message)
+                )
+                dialog.setDefaultButton(repair_button)
+            
+            dialog.exec()
+            
         except Exception as e:
             # Fallback: just show basic error if message box fails
             import sys
@@ -917,6 +1008,104 @@ class EnhancedAudioEditor(QWidget):
                 self.status_label.setText("Failed to load audio file.")
             except Exception:
                 pass
+
+    def _handle_repair_and_retry(self, original_error: str):
+        """Attempt to repair corrupted audio file and retry loading"""
+        try:
+            if not hasattr(self, "_current_loading_file") or not self._current_loading_file:
+                QMessageBox.warning(
+                    self, 
+                    "Repair Failed", 
+                    "Unable to identify file for repair."
+                )
+                return
+            
+            file_path = self._current_loading_file
+            
+            # Show modeless progress dialog
+            self.repair_progress = QMessageBox(self)
+            self.repair_progress.setWindowTitle("Repairing Audio")
+            self.repair_progress.setText("Attempting to repair corrupted audio file...\nThis may take a moment.")
+            self.repair_progress.setStandardButtons(QMessageBox.NoButton)
+            self.repair_progress.show()
+            
+            # Determine repair output path
+            from pathlib import Path
+            file_obj = Path(file_path)
+            repair_output = file_obj.parent / f"{file_obj.stem}_repaired.wav"
+            
+            # Start async repair in worker thread
+            self.repair_thread = AudioRepairThread(str(file_path), str(repair_output))
+            self.repair_thread.repair_completed.connect(
+                lambda result: self._on_repair_completed(result, str(repair_output))
+            )
+            self.repair_thread.start()
+            
+        except Exception as e:
+            import sys
+            print(f"Error in repair handler: {e}", file=sys.stderr)
+            QMessageBox.critical(
+                self,
+                "Unexpected Error",
+                f"An unexpected error occurred:\n\n{str(e)}"
+            )
+
+    def _on_repair_completed(self, result: Dict[str, Any], repair_output: str):
+        """Handle repair completion result"""
+        try:
+            # Close progress dialog
+            if hasattr(self, 'repair_progress') and self.repair_progress:
+                try:
+                    self.repair_progress.close()
+                except Exception:
+                    pass
+            
+            if result.get("success"):
+                # Repair successful - now try loading the repaired file
+                info_msg = (
+                    f"Audio file successfully repaired!\n\n"
+                    f"Repaired: {repair_output}\n\n"
+                    f"Now loading the repaired file..."
+                )
+                QMessageBox.information(self, "Repair Successful", info_msg)
+                
+                # Update file path to repaired version and retry load
+                self._current_loading_file = repair_output
+                self.audio_file = repair_output
+                
+                # Restart async loading with repaired file
+                self.is_loading = True
+                self.update_ui_for_loading(True)
+                self.loader_thread = cast(Any, AudioLoaderThread(repair_output))
+                
+                if self.loader_thread is not None:
+                    try:
+                        self.loader_thread.audio_loaded.connect(self.on_audio_loaded)
+                        self.loader_thread.error_occurred.connect(self.on_load_error)
+                        self.loader_thread.progress_updated.connect(self.on_load_progress)
+                        self.loader_thread.finished.connect(self.on_load_finished)
+                    except Exception:
+                        pass
+                
+                self.show_progress("Loading Repaired Audio File")
+                
+                if self.loader_thread is not None:
+                    try:
+                        self.loader_thread.start()
+                    except Exception:
+                        pass
+            else:
+                # Repair failed
+                error_detail = result.get("error", "Unknown error during repair")
+                QMessageBox.critical(
+                    self,
+                    "Repair Failed",
+                    f"Could not repair audio file:\n\n{error_detail}\n\n"
+                    f"The file may be too severely corrupted to recover."
+                )
+        except Exception as e:
+            import sys
+            print(f"Error in repair completion handler: {e}", file=sys.stderr)
 
     def on_load_progress(self, value: int, message: str):
         """Handle loading progress updates"""

@@ -2,17 +2,20 @@
 """
 Audio file repair utility for fixing corrupted or unsupported WAV files.
 
-This script re-encodes problematic audio files into a standard format
-that's compatible with the audio processing pipeline.
+This script uses the AudioRepairService to re-encode problematic audio files
+into a standard format that's compatible with the audio processing pipeline.
 """
 
-import os
-import subprocess
 import sys
 from pathlib import Path
 
+# Add parent directories to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-def repair_audio_file(input_path: str, output_path: str = None, force: bool = False) -> bool:
+from services.audio_repair_service import AudioRepairService
+
+
+def repair_audio_file(input_path: str, output_path=None, force: bool = False) -> bool:
     """
     Re-encode an audio file to standard WAV format.
     
@@ -27,7 +30,7 @@ def repair_audio_file(input_path: str, output_path: str = None, force: bool = Fa
     input_path = Path(input_path)
     
     if not input_path.exists():
-        print(f"❌ Error: Input file not found: {input_path}")
+        print(f"Error: Input file not found: {input_path}")
         return False
     
     if output_path is None:
@@ -36,53 +39,22 @@ def repair_audio_file(input_path: str, output_path: str = None, force: bool = Fa
         output_path = Path(output_path)
     
     if output_path.exists() and not force:
-        print(f"❌ Error: Output file already exists: {output_path}")
+        print(f"Error: Output file already exists: {output_path}")
         print(f"   Use --force to overwrite")
         return False
     
-    print(f"🔧 Repairing audio file...")
+    print(f"Repairing audio file...")
     print(f"   Input:  {input_path}")
     print(f"   Output: {output_path}")
     
-    # FFmpeg command to re-encode to standard PCM WAV
-    # - acodec pcm_s16le: 16-bit signed little-endian PCM (universal format)
-    # - ar 44100: 44.1kHz sample rate (standard)
-    # - ac 2: Stereo (2 channels)
-    cmd = [
-        "ffmpeg",
-        "-i", str(input_path),
-        "-acodec", "pcm_s16le",
-        "-ar", "44100",
-        "-ac", "2",
-        "-y",  # Overwrite output file
-        str(output_path)
-    ]
+    result = AudioRepairService.repair_audio_file(str(input_path), str(output_path), force=force)
     
-    try:
-        result = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        
-        if result.returncode == 0:
-            size_kb = output_path.stat().st_size / 1024
-            print(f"✅ Success! File repaired: {size_kb:.1f} KB")
-            return True
-        else:
-            print(f"❌ FFmpeg error:")
-            print(result.stderr)
-            return False
-            
-    except FileNotFoundError:
-        print("❌ Error: FFmpeg not found. Please install FFmpeg:")
-        print("   Windows: choco install ffmpeg  (or download from ffmpeg.org)")
-        print("   macOS:   brew install ffmpeg")
-        print("   Linux:   sudo apt-get install ffmpeg")
-        return False
-    except Exception as e:
-        print(f"❌ Error: {e}")
+    if result['success']:
+        size_kb = result['repaired_size'] / 1024
+        print(f"Success! File repaired: {size_kb:.1f} KB")
+        return True
+    else:
+        print(f"Error: {result['error']}")
         return False
 
 
