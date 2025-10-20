@@ -1,13 +1,13 @@
 from unittest.mock import patch
 
-from audio_recorder import AudioRecorderManager
+from src.audio_recorder import AudioRecorderManager
 
 
 def test_set_selected_device_invalid(monkeypatch):
     manager = AudioRecorderManager()
 
     # Make query_devices return no input devices
-    with patch("audio_recorder.sd.query_devices", return_value=[]):
+    with patch("src.audio_recorder.sd.query_devices", return_value=[]):
         ok = manager.set_selected_device(99)  # arbitrary device index
         assert ok is False
 

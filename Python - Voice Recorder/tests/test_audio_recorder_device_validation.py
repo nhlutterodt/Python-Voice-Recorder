@@ -1,13 +1,13 @@
 import os
 
 import pytest
-from audio_recorder import AudioRecorderManager
+from src.audio_recorder import AudioRecorderManager
 
 
 def test_no_input_devices(monkeypatch, tmp_path):
     """When sounddevice reports no input devices, validation should fail."""
     # Patch query_devices to return empty list (accept any args)
-    monkeypatch.setattr("audio_recorder.sd.query_devices", lambda *a, **k: [])
+    monkeypatch.setattr("src.audio_recorder.sd.query_devices", lambda *a, **k: [])
 
     mgr = AudioRecorderManager()
 

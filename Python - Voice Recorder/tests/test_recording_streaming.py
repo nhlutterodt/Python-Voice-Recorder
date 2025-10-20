@@ -5,7 +5,7 @@ import wave
 from unittest.mock import patch
 
 import numpy as np
-from audio_recorder import AudioRecorderThread
+from src.audio_recorder import AudioRecorderThread
 
 
 def test_streaming_recording_writes_file(tmp_path):

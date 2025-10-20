@@ -1,7 +1,7 @@
 import wave
 
 import numpy as np
-from audio_recorder import AudioRecorderThread
+from src.audio_recorder import AudioRecorderThread
 
 
 def test_write_wave_from_float32_chunks(tmp_path):

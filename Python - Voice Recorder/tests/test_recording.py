@@ -11,7 +11,7 @@ import os
 import time
 
 import sounddevice as sd
-from audio_recorder import AudioRecorderManager
+from src.audio_recorder import AudioRecorderManager
 
 
 def test_audio_devices():

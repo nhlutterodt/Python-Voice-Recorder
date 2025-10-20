@@ -4,7 +4,7 @@ import time
 from unittest.mock import patch
 
 import numpy as np
-from audio_recorder import AudioRecorderThread
+from src.audio_recorder import AudioRecorderThread
 
 
 def test_inputstream_raises_on_open(tmp_path, caplog):
@@ -17,7 +17,7 @@ def test_inputstream_raises_on_open(tmp_path, caplog):
             # Simulate device disappearing when attempting to open stream
             raise RuntimeError("Device disappeared on open")
 
-    with patch("audio_recorder.sd.InputStream", new=RaisingInputStream):
+    with patch("src.audio_recorder.sd.InputStream", new=RaisingInputStream):
         thread = AudioRecorderThread(
             str(out), sample_rate=sample_rate, channels=channels
         )

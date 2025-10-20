@@ -17,6 +17,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 
 from voice_recorder.core.logging_config import get_logger
 from voice_recorder.performance_monitor import performance_monitor
+from voice_recorder.utilities import BaseWorkerThread, AudioDeviceManager
 
 # When running headless (scripts/tests) persist recordings to DB automatically
 try:
@@ -28,13 +29,12 @@ except Exception:
 logger = get_logger(__name__)
 
 
-class AudioRecorderThread(QThread):
+class AudioRecorderThread(BaseWorkerThread):
     """Asynchronous audio recorder with real-time monitoring"""
 
     recording_started = Signal()
     recording_progress = Signal(float, float)  # duration, audio_level
     recording_completed = Signal(str, float)  # file_path, duration
-    recording_error = Signal(str)
 
     def __init__(
         self,
@@ -59,51 +59,46 @@ class AudioRecorderThread(QThread):
         # prevent finalizing partial files into final recordings.
         self._recording_failed = False
 
-    def run(self):
+    def safe_run(self):
         """Record audio in background thread with progress monitoring.
 
         The implementation delegates smaller responsibilities to helper
         methods so the top-level flow is easy to follow and test.
         """
-        try:
-            with performance_monitor.measure_operation("Audio Recording"):
-                self.recording_started.emit()
-                self.is_recording = True
-                self.start_time = time.time()
+        with performance_monitor.measure_operation("Audio Recording"):
+            self.recording_started.emit()
+            self.is_recording = True
+            self.start_time = time.time()
 
-                # Prepare environment and WAV file
-                tmp_path = f"{self.output_path}.part"
-                wav_file, wav_lock = self._prepare_wav_file(tmp_path)
+            # Prepare environment and WAV file
+            tmp_path = f"{self.output_path}.part"
+            wav_file, wav_lock = self._prepare_wav_file(tmp_path)
 
-                # Configure chunking and build InputStream kwargs
-                chunk_duration = 0.1
-                chunk_frames = int(chunk_duration * self.sample_rate)
-                self.audio_data = []
+            # Configure chunking and build InputStream kwargs
+            chunk_duration = 0.1
+            chunk_frames = int(chunk_duration * self.sample_rate)
+            self.audio_data = []
 
-                audio_callback = self._make_audio_callback(wav_file, wav_lock)
-                stream_kwargs = self._open_input_stream_kwargs(
-                    audio_callback, chunk_frames
+            audio_callback = self._make_audio_callback(wav_file, wav_lock)
+            stream_kwargs = self._open_input_stream_kwargs(
+                audio_callback, chunk_frames
+            )
+
+            # Start the recording stream and loop until stopped
+            with sd.InputStream(**stream_kwargs):
+                logger.debug("InputStream started for recording")
+                while self.is_recording:
+                    self.msleep(50)
+                logger.debug(
+                    "Recording stop requested; exiting InputStream context"
                 )
 
-                # Start the recording stream and loop until stopped
-                with sd.InputStream(**stream_kwargs):
-                    logger.debug("InputStream started for recording")
-                    while self.is_recording:
-                        self.msleep(50)
-                    logger.debug(
-                        "Recording stop requested; exiting InputStream context"
-                    )
-
-                # Finalize WAV and move to final destination
-                try:
-                    self._finalize_wav(wav_file, wav_lock, tmp_path)
-                except Exception:
-                    # _finalize_wav already logs; re-raise to hit outer error path
-                    raise
-
-        except Exception as e:
-            logger.exception("Recording failed")
-            self.recording_error.emit(f"Recording failed: {str(e)}")
+            # Finalize WAV and move to final destination
+            try:
+                self._finalize_wav(wav_file, wav_lock, tmp_path)
+            except Exception:
+                # _finalize_wav already logs; re-raise to hit outer error path
+                raise
 
     def _prepare_wav_file(self, tmp_path: str):
         """Create directories and open a WAV file for streaming writes.
@@ -294,14 +289,13 @@ class AudioRecorderThread(QThread):
         return duration
 
 
-class AudioLevelMonitor(QThread):
+class AudioLevelMonitor(BaseWorkerThread):
     """Real-time audio level monitoring running in a background thread.
 
     Uses sounddevice.InputStream with a callback to emit short-term RMS levels.
     """
 
     level_updated = Signal(float)
-    device_error = Signal(str)
 
     def __init__(
         self,
@@ -329,39 +323,34 @@ class AudioLevelMonitor(QThread):
             self.requestInterruption()
             self.wait(1000)
 
-    def run(self):
-        try:
-            chunk_duration = 0.05
-            frames = int(chunk_duration * self.sample_rate)
+    def safe_run(self):
+        chunk_duration = 0.05
+        frames = int(chunk_duration * self.sample_rate)
 
-            def callback(indata, frames_, time_, status):
-                if status:
-                    logger.debug(f"AudioLevelMonitor status: {status}")
-                try:
-                    level = float(np.sqrt(np.mean(indata**2)))
-                    self.level_updated.emit(level)
-                except Exception:
-                    logger.exception("Error computing audio level")
+        def callback(indata, frames_, time_, status):
+            if status:
+                logger.debug(f"AudioLevelMonitor status: {status}")
+            try:
+                level = float(np.sqrt(np.mean(indata**2)))
+                self.level_updated.emit(level)
+            except Exception:
+                logger.exception("Error computing audio level")
 
-            stream_kwargs = dict(
-                callback=callback,
-                samplerate=self.sample_rate,
-                channels=self.channels,
-                dtype=np.float32,
-                blocksize=frames,
-            )
-            if self.device is not None:
-                stream_kwargs["device"] = self.device
+        stream_kwargs = dict(
+            callback=callback,
+            samplerate=self.sample_rate,
+            channels=self.channels,
+            dtype=np.float32,
+            blocksize=frames,
+        )
+        if self.device is not None:
+            stream_kwargs["device"] = self.device
 
-            with sd.InputStream(**stream_kwargs):
-                logger.debug("AudioLevelMonitor InputStream started")
-                while not self._stop_requested and not self.isInterruptionRequested():
-                    self.msleep(50)
-                logger.debug("AudioLevelMonitor stopping")
-
-        except Exception as e:
-            logger.exception("Audio monitoring error")
-            self.device_error.emit(f"Audio monitoring error: {e}")
+        with sd.InputStream(**stream_kwargs):
+            logger.debug("AudioLevelMonitor InputStream started")
+            while not self._stop_requested and not self.isInterruptionRequested():
+                self.msleep(50)
+            logger.debug("AudioLevelMonitor stopping")
 
 
 class AudioRecorderManager(QObject):
@@ -379,101 +368,46 @@ class AudioRecorderManager(QObject):
         self.level_monitor: Optional[AudioLevelMonitor] = None
         self.is_recording = False
         self.output_directory = "recordings/raw"
-        # Currently selected device (index or name) used by manager-level
-        # operations when callers do not pass an explicit device.
-        self.selected_device: Optional[Union[int, str]] = None
+        
+        # Initialize device manager for centralized device handling
+        self.device_manager = AudioDeviceManager()
+        # Relay device manager status changes to our signal
+        self.device_manager.status_changed.connect(
+            lambda msg: self.device_status_changed.emit("error" not in msg.lower())
+        )
 
         # Ensure output directory exists
         os.makedirs(self.output_directory, exist_ok=True)
 
         # Validate audio devices on initialization (default device)
-        self._validate_audio_devices()
+        self.device_manager.validate_device(None)
 
     def set_selected_device(self, device: Optional[Union[int, str]]) -> bool:
         """Set and validate the selected input device for subsequent operations.
 
         Returns True on success, False if the device is unusable.
         """
-        if device is None:
-            # Clearing selection is always allowed
-            self.selected_device = None
+        success = self.device_manager.set_selected_device(device)
+        if success:
             self.device_status_changed.emit(True)
-            return True
-
-        # Validate the requested device
-        ok = self._validate_audio_devices(device=device)
-        if ok:
-            self.selected_device = device
-            self.device_status_changed.emit(True)
-            return True
         else:
-            return False
+            self.recording_error.emit(f"Device selection failed: {device}")
+            self.device_status_changed.emit(False)
+        return success
 
     def get_selected_device(self) -> Optional[Union[int, str]]:
         """Return the currently selected device (index or name)."""
-        return self.selected_device
+        return self.device_manager.get_selected_device()
 
     def _validate_audio_devices(self, device: Optional[Union[int, str]] = None) -> bool:
-        """Validate that audio input devices are available.
+        """Validate that audio input devices are available (delegates to device_manager).
 
         If `device` is provided it will be used when attempting to open a
         short InputStream. Returns True when a usable input device exists.
         """
-        try:
-            devices = sd.query_devices()  # type: ignore
-            input_devices = [d for d in devices if d.get("max_input_channels", 0) > 0]  # type: ignore
-
-            if not input_devices:
-                self.device_status_changed.emit(False)
-                return False
-
-            # Determine a sensible samplerate for the target device
-            test_samplerate = 44100
-            try:
-                target_dev = device if device is not None else sd.default.device  # type: ignore
-                if isinstance(target_dev, (list, tuple)):
-                    target_dev = target_dev[0]
-
-                if target_dev is not None:
-                    try:
-                        dev_info = sd.query_devices(target_dev)  # type: ignore
-                        if isinstance(dev_info, dict):
-                            test_samplerate = int(
-                                dev_info.get("default_samplerate", test_samplerate)
-                            )
-                    except Exception:
-                        # ignore and keep fallback samplerate
-                        pass
-            except Exception:
-                pass
-
-            # Try opening an InputStream for the specified (or default)
-            # device to ensure it is usable.
-            try:
-                stream_kwargs = dict(
-                    samplerate=test_samplerate,
-                    channels=1,
-                    dtype=np.float32,
-                    blocksize=1024,
-                )
-                if device is not None:
-                    stream_kwargs["device"] = device
-
-                with sd.InputStream(**stream_kwargs):
-                    pass
-                self.device_status_changed.emit(True)
-                return True
-            except Exception as e:
-                logger.exception("InputStream device test failed")
-                self.device_status_changed.emit(False)
-                self.recording_error.emit(f"Audio device test failed: {e}")
-                return False
-
-        except Exception as e:
-            logger.exception("Device validation failed")
-            self.device_status_changed.emit(False)
-            self.recording_error.emit(f"Device validation failed: {str(e)}")
-            return False
+        is_valid = self.device_manager.validate_device(device)
+        self.device_status_changed.emit(is_valid)
+        return is_valid
 
     def start_recording(
         self,
@@ -489,7 +423,7 @@ class AudioRecorderManager(QObject):
         # Validate devices before starting
         # If caller didn't pass a device, prefer the manager's selected_device
         if device is None:
-            device = self.selected_device
+            device = self.device_manager.get_selected_device()
 
         if not self._validate_audio_devices(device=device):
             self.recording_error.emit("No audio input devices available")
@@ -579,27 +513,18 @@ class AudioRecorderManager(QObject):
             self.level_monitor.stop_monitoring()
 
     def get_available_devices(self) -> List[Dict[str, Any]]:
-        """Get list of available audio input devices"""
-        try:
-            devices = sd.query_devices()  # type: ignore
-            input_devices: List[Dict[str, Any]] = []
-
-            for i, device in enumerate(devices):  # type: ignore
-                if device.get("max_input_channels", 0) > 0:  # type: ignore
-                    input_devices.append(
-                        {
-                            "index": i,
-                            "name": device.get("name", ""),  # type: ignore
-                            "channels": device.get("max_input_channels", 0),  # type: ignore
-                            "sample_rate": device.get("default_samplerate", 44100),  # type: ignore
-                        }
-                    )
-
-            return input_devices
-
-        except Exception as e:
-            self.recording_error.emit(f"Failed to get devices: {str(e)}")
-            return []
+        """Get list of available audio input devices (delegates to device_manager)"""
+        devices = self.device_manager.get_available_devices()
+        # Convert to AudioRecorder's expected format if needed
+        result: List[Dict[str, Any]] = []
+        for i, device in enumerate(devices):
+            result.append({
+                "index": i,
+                "name": device.get("name", ""),
+                "channels": device.get("max_input_channels", 0),
+                "sample_rate": device.get("default_samplerate", 44100),
+            })
+        return result
 
     def _on_recording_started(self):
         """Handle recording start confirmation"""

@@ -29,17 +29,17 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QMessageBox,
     QListWidget,
-    QListWidgetItem,
 )
 from PySide6.QtGui import QColor
 
 from voice_recorder.services.audio_repair_service import AudioRepairService  # type: ignore
 from voice_recorder.core.logging_config import get_logger  # type: ignore
+from voice_recorder.utilities import BaseWorkerThread, AudioFileSelector
 
 logger = get_logger(__name__)
 
 
-class AudioRepairWorkerThread(QThread):
+class AudioRepairWorkerThread(BaseWorkerThread):
     """Worker thread for batch audio repair operations"""
 
     progress_updated = Signal(int, str)  # percentage, message
@@ -59,88 +59,88 @@ class AudioRepairWorkerThread(QThread):
         self.use_suffix = use_suffix
         self.force = force
 
-    def run(self):
-        """Execute batch repair in worker thread"""
+    def _repair_single_file(self, file_path: str) -> tuple[bool, str, int, int]:
+        """Repair a single audio file and return metadata.
+        
+        Args:
+            file_path: Path to the audio file to repair
+            
+        Returns:
+            Tuple of (success: bool, message: str, size_before: int, size_after: int)
+        """
+        if not os.path.exists(file_path):
+            return False, "File not found", 0, 0
+        
         try:
-            total_files = len(self.file_paths)
-            successful = 0
-            failed = 0
-            total_size_before = 0
-            total_size_after = 0
-
-            for idx, file_path in enumerate(self.file_paths):
-                if not os.path.exists(file_path):
-                    self.file_repaired.emit(file_path, False, "File not found")
-                    failed += 1
-                    continue
-
-                try:
-                    # Get file size before
-                    size_before = os.path.getsize(file_path)
-                    total_size_before += size_before
-
-                    # Determine output path
-                    if self.output_dir:
-                        output_path = os.path.join(
-                            self.output_dir,
-                            Path(file_path).name.replace(".wav", "_repaired.wav"),
-                        )
-                    else:
-                        p = Path(file_path)
-                        output_path = str(p.parent / f"{p.stem}_repaired.wav")
-
-                    # Repair file
-                    result = AudioRepairService.repair_audio_file(
-                        input_path=file_path,
-                        output_path=output_path,
-                        force=self.force,
-                    )
-
-                    if result.get("success"):
-                        # Get file size after
-                        size_after = os.path.getsize(output_path)
-                        total_size_after += size_after
-
-                        message = f"✓ Repaired: {Path(file_path).name}"
-                        self.file_repaired.emit(file_path, True, message)
-                        successful += 1
-                    else:
-                        error = result.get("error", "Unknown error")
-                        message = f"✗ Failed: {Path(file_path).name} - {error}"
-                        self.file_repaired.emit(file_path, False, message)
-                        failed += 1
-
-                except Exception as e:
-                    message = f"✗ Error: {Path(file_path).name} - {str(e)}"
-                    self.file_repaired.emit(file_path, False, message)
-                    failed += 1
-
-                # Update progress
-                progress = int((idx + 1) / total_files * 100)
-                self.progress_updated.emit(
-                    progress, f"Processing file {idx + 1} of {total_files}"
+            # Get file size before
+            size_before = os.path.getsize(file_path)
+            
+            # Determine output path
+            if self.output_dir:
+                output_path = os.path.join(
+                    self.output_dir,
+                    Path(file_path).name.replace(".wav", "_repaired.wav"),
                 )
-
-            # Emit completion summary
-            summary = {
-                "total": total_files,
-                "successful": successful,
-                "failed": failed,
-                "size_before": total_size_before,
-                "size_after": total_size_after,
-            }
-            self.repair_complete.emit(summary)
-
-        except Exception as e:
-            logger.error(f"Error in repair worker thread: {e}")
-            self.repair_complete.emit(
-                {
-                    "total": len(self.file_paths),
-                    "successful": 0,
-                    "failed": len(self.file_paths),
-                    "error": str(e),
-                }
+            else:
+                p = Path(file_path)
+                output_path = str(p.parent / f"{p.stem}_repaired.wav")
+            
+            # Repair file
+            result = AudioRepairService.repair_audio_file(
+                input_path=file_path,
+                output_path=output_path,
+                force=self.force,
             )
+            
+            if result.get("success"):
+                size_after = os.path.getsize(output_path)
+                message = f"✓ Repaired: {Path(file_path).name}"
+                return True, message, size_before, size_after
+            else:
+                error = result.get("error", "Unknown error")
+                message = f"✗ Failed: {Path(file_path).name} - {error}"
+                return False, message, size_before, 0
+        
+        except Exception as e:
+            message = f"✗ Error: {Path(file_path).name} - {str(e)}"
+            return False, message, 0, 0
+
+    def safe_run(self):
+        """Execute batch repair in worker thread"""
+        total_files = len(self.file_paths)
+        successful = 0
+        failed = 0
+        total_size_before = 0
+        total_size_after = 0
+
+        for idx, file_path in enumerate(self.file_paths):
+            success, message, size_before, size_after = self._repair_single_file(file_path)
+            
+            # Update counters
+            if success:
+                successful += 1
+                total_size_before += size_before
+                total_size_after += size_after
+            else:
+                failed += 1
+                total_size_before += size_before
+            
+            # Emit file result
+            self.file_repaired.emit(file_path, success, message)
+            
+            # Update progress
+            progress = int((idx + 1) / total_files * 100)
+            self.progress_updated.emit(progress, f"Processing file {idx + 1} of {total_files}")
+
+        # Emit completion summary
+        summary = {
+            "total": total_files,
+            "successful": successful,
+            "failed": failed,
+            "size_before": total_size_before,
+            "size_after": total_size_after,
+        }
+        self.repair_complete.emit(summary)
 
 
 class AudioRepairWidget(QDialog):
@@ -259,42 +259,20 @@ class AudioRepairWidget(QDialog):
 
     def select_files(self):
         """Open file dialog to select audio files"""
-        files, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Select Audio Files",
-            "recordings/raw",
-            "Audio Files (*.wav *.mp3 *.ogg);;WAV Files (*.wav);;All Files (*)",
-        )
-
+        files = AudioFileSelector.select_audio_files(self, "recordings/raw")
         if files:
             self.selected_files.extend(files)
             self.update_file_list()
 
     def select_directory(self):
         """Open directory dialog to select all audio files from a directory"""
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Directory Containing Audio Files", "recordings/raw"
-        )
-
-        if directory:
-            # Find all audio files in directory
-            audio_exts = (".wav", ".mp3", ".ogg")
-            files = [
-                str(f)
-                for f in Path(directory).rglob("*")
-                if f.suffix.lower() in audio_exts
-            ]
-
-            if files:
-                self.selected_files.extend(files)
-                self.update_file_list()
-                QMessageBox.information(
-                    self, "Files Found", f"Found {len(files)} audio files."
-                )
-            else:
-                QMessageBox.warning(
-                    self, "No Files", "No audio files found in directory."
-                )
+        files = AudioFileSelector.select_audio_directory(self, "recordings/raw")
+        if files:
+            self.selected_files.extend(files)
+            self.update_file_list()
+            QMessageBox.information(
+                self, "Files Found", f"Found {len(files)} audio files."
+            )
 
     def select_output_directory(self):
         """Select custom output directory for repaired files"""
@@ -313,11 +291,7 @@ class AudioRepairWidget(QDialog):
 
     def update_file_list(self):
         """Update the file list display"""
-        self.file_list.clear()
-        for file_path in self.selected_files:
-            item = QListWidgetItem(Path(file_path).name)
-            item.setToolTip(file_path)
-            self.file_list.addItem(item)
+        AudioFileSelector.populate_list_widget(self.file_list, self.selected_files)
 
     def validate_files(self):
         """Validate selected audio files for corruption"""

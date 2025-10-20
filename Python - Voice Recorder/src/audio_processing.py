@@ -1,10 +1,10 @@
 # audio_processing.py
 # Enhanced audio processing with asynchronous operations and memory efficiency
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from PySide6.QtCore import QObject, QThread, Signal
-from PySide6.QtWidgets import QApplication, QProgressDialog
+from PySide6.QtWidgets import QApplication, QProgressDialog, QWidget
 
 if TYPE_CHECKING:
     from pydub import AudioSegment  # type: ignore
@@ -13,25 +13,25 @@ import os
 import wave
 
 from core.logging_config import get_logger
+from voice_recorder.utilities import BaseWorkerThread, StrategyExecutor
 
 # Setup logging for this module
 logger = get_logger(__name__)
 
 
-class AudioLoaderThread(QThread):
+class AudioLoaderThread(BaseWorkerThread):
     """Asynchronous audio file loader to prevent UI blocking"""
 
     audio_loaded = Signal(
         object, str
     )  # AudioSegment at runtime; use object to avoid import-time
-    error_occurred = Signal(str)
     progress_updated = Signal(int, str)
 
     def __init__(self, file_path: str):
         super().__init__()
         self.file_path = file_path
 
-    def _repair_wav_file(self) -> dict | None:
+    def _repair_wav_file(self) -> dict[str, Any] | None:
         """Attempt to repair a corrupt WAV file using Python's wave module.
         
         Returns a dict with keys: data, sample_width, frame_rate, channels
@@ -60,104 +60,111 @@ class AudioLoaderThread(QThread):
             logger.debug(f"WAV repair with wave module failed: {e}")
             return None
 
-    def run(self):
+    def _strategy_1_wav(self) -> "AudioSegment":
+        """Strategy 1: Try WAV with pydub's built-in handler"""
+        self.progress_updated.emit(35, "Loading WAV format...")
+        from pydub import AudioSegment  # type: ignore
+        return cast("AudioSegment", AudioSegment.from_wav(self.file_path))
+
+    def _strategy_2_autodetect(self) -> "AudioSegment":
+        """Strategy 2: Auto-detect format"""
+        self.progress_updated.emit(40, "Auto-detecting audio format...")
+        from pydub import AudioSegment  # type: ignore
+        return cast("AudioSegment", AudioSegment.from_file(self.file_path))
+
+    def _strategy_3_reencode(self) -> "AudioSegment":
+        """Strategy 3: Re-encode with explicit WAV format specification"""
+        self.progress_updated.emit(45, "Re-encoding audio file...")
+        from pydub import AudioSegment  # type: ignore
+        return cast(
+            "AudioSegment", 
+            AudioSegment.from_file(self.file_path, format="wav")
+        )
+
+    def _strategy_4_repair(self) -> "AudioSegment":
+        """Strategy 4: Repair with Python wave module"""
+        self.progress_updated.emit(50, "Attempting WAV repair with Python wave module...")
+        from pydub import AudioSegment  # type: ignore
+        
+        # Try to read raw PCM data directly with Python's wave module
+        wav_data = self._repair_wav_file()
+        if wav_data:
+            return AudioSegment(
+                data=wav_data["data"],
+                sample_width=wav_data["sample_width"],
+                frame_rate=wav_data["frame_rate"],
+                channels=wav_data["channels"]
+            )
+        else:
+            raise RuntimeError("WAV repair failed: unable to extract PCM data")
+
+    def _handle_load_failure(self) -> None:
+        """Handle failure when all strategies have failed"""
+        error_msg = (
+            "Failed to load audio file.\n\n"
+            "The file appears to be corrupted or in an unsupported format.\n\n"
+            "RECOVERY OPTIONS:\n"
+            "1. Use the Audio Repair Tool:\n"
+            f"   python tools/audio_repair.py \"{self.file_path}\"\n\n"
+            "2. Convert with FFmpeg:\n"
+            f"   ffmpeg -i \"{self.file_path}\" -acodec pcm_s16le -ar 44100 output.wav\n\n"
+            "3. If the file is severely corrupted, it may not be recoverable."
+        )
+        raise RuntimeError(error_msg)
+
+    def _finalize_load(self, audio_segment: "AudioSegment") -> None:
+        """Finalize audio loading: process metadata and emit success signals"""
+        self.progress_updated.emit(70, "Processing audio metadata...")
+
+        # Simulate additional processing time for larger files
+        file_size_mb = os.path.getsize(self.file_path) / (1024 * 1024)
+        if file_size_mb > 10:  # Files larger than 10MB
+            self.msleep(100)  # Small delay for large files
+
+        self.progress_updated.emit(100, "Audio loaded successfully!")
+        self.audio_loaded.emit(audio_segment, self.file_path)
+
+    def safe_run(self):
         """Load audio file in background thread with robust codec support"""
+        self.progress_updated.emit(10, "Opening audio file...")
+
+        # Check file exists and is accessible
+        if not os.path.exists(self.file_path):
+            raise FileNotFoundError(f"Audio file not found: {self.file_path}")
+
+        self.progress_updated.emit(30, "Reading audio data...")
+
+        # Lazy-import pydub to avoid import-time crashes when native deps
+        # (audioop/pyaudioop) are not available in the environment.
         try:
-            self.progress_updated.emit(10, "Opening audio file...")
+            from pydub import AudioSegment  # type: ignore
+        except Exception as _e:
+            raise ImportError(f"pydub.AudioSegment not available: {_e}")
 
-            # Check file exists and is accessible
-            if not os.path.exists(self.file_path):
-                raise FileNotFoundError(f"Audio file not found: {self.file_path}")
-
-            self.progress_updated.emit(30, "Reading audio data...")
-
-            # Lazy-import pydub to avoid import-time crashes when native deps
-            # (audioop/pyaudioop) are not available in the environment.
-            try:
-                from pydub import AudioSegment  # type: ignore
-            except Exception as _e:
-                raise ImportError(f"pydub.AudioSegment not available: {_e}")
-
-            # Try multiple loading strategies for robustness
-            audio_segment = None
-            errors = []
-            
-            # Strategy 1: Try WAV with pydub's built-in handler
-            try:
-                self.progress_updated.emit(35, "Loading WAV format...")
-                audio_segment = cast("AudioSegment", AudioSegment.from_wav(self.file_path))
-            except Exception as e:
-                errors.append(f"WAV loader failed: {e}")
-                logger.debug(f"WAV loading attempt failed: {e}")
-            
-            # Strategy 2: If WAV failed, try generic format detection
-            if audio_segment is None:
-                try:
-                    self.progress_updated.emit(40, "Auto-detecting audio format...")
-                    # Let pydub auto-detect the format
-                    audio_segment = cast("AudioSegment", AudioSegment.from_file(self.file_path))
-                except Exception as e:
-                    errors.append(f"Auto-detect failed: {e}")
-                    logger.debug(f"Auto-detect loading attempt failed: {e}")
-            
-            # Strategy 3: If both failed, try to re-encode using ffmpeg
-            if audio_segment is None:
-                try:
-                    self.progress_updated.emit(45, "Re-encoding audio file...")
-                    # Try loading with explicit format specification
-                    audio_segment = cast(
-                        "AudioSegment", 
-                        AudioSegment.from_file(self.file_path, format="wav")
-                    )
-                except Exception as e:
-                    errors.append(f"Re-encode attempt failed: {e}")
-                    logger.debug(f"Re-encode loading attempt failed: {e}")
-            
-            # Strategy 4: If all else fails, try to repair WAV with wave module
-            if audio_segment is None:
-                try:
-                    self.progress_updated.emit(50, "Attempting WAV repair with Python wave module...")
-                    # Try to read raw PCM data directly with Python's wave module
-                    wav_data = self._repair_wav_file()
-                    if wav_data:
-                        from pydub import AudioSegment  # type: ignore
-                        audio_segment = cast(
-                            "AudioSegment",
-                            AudioSegment(
-                                data=wav_data["data"],
-                                sample_width=wav_data["sample_width"],
-                                frame_rate=wav_data["frame_rate"],
-                                channels=wav_data["channels"],
-                            ),
-                        )
-                except Exception as e:
-                    errors.append(f"WAV repair attempt failed: {e}")
-                    logger.debug(f"WAV repair loading attempt failed: {e}")
-            
-            if audio_segment is None:
-                # All strategies failed, provide detailed error
-                error_msg = "Failed to load audio file.\n\n"
-                error_msg += "The file appears to be corrupted or in an unsupported format.\n\n"
-                error_msg += "RECOVERY OPTIONS:\n"
-                error_msg += "1. Use the Audio Repair Tool:\n"
-                error_msg += "   python tools/audio_repair.py \"" + self.file_path + "\"\n\n"
-                error_msg += "2. Convert with FFmpeg:\n"
-                error_msg += "   ffmpeg -i \"" + self.file_path + "\" -acodec pcm_s16le -ar 44100 output.wav\n\n"
-                error_msg += "3. If the file is severely corrupted, it may not be recoverable."
-                raise RuntimeError(error_msg)
-
-            self.progress_updated.emit(70, "Processing audio metadata...")
-
-            # Simulate additional processing time for larger files
-            file_size_mb = os.path.getsize(self.file_path) / (1024 * 1024)
-            if file_size_mb > 10:  # Files larger than 10MB
-                self.msleep(100)  # Small delay for large files
-
-            self.progress_updated.emit(100, "Audio loaded successfully!")
-            self.audio_loaded.emit(audio_segment, self.file_path)
-
-        except Exception as e:
-            self.error_occurred.emit(str(e))
+        # Execute loading strategies sequentially
+        executor = StrategyExecutor()
+        strategies = [
+            ("WAV (pydub)", self._strategy_1_wav),
+            ("Auto-detect", self._strategy_2_autodetect),
+            ("Re-encode WAV", self._strategy_3_reencode),
+            ("Repair & rebuild", self._strategy_4_repair),
+        ]
+        
+        audio_segment = executor.execute_strategies(
+            strategies,
+            on_progress=lambda idx, msg: self.progress_updated.emit(
+                int((idx / len(strategies)) * 60) + 30,
+                msg
+            )
+        )
+        
+        if audio_segment is None:
+            # All strategies failed - provide helpful error message
+            logger.warning(executor.get_error_summary())
+            self._handle_load_failure()
+        
+        # Success - finalize and emit completion
+        self._finalize_load(audio_segment)
 
 
 class ChunkedAudioProcessor(QObject):
@@ -243,12 +250,11 @@ class ChunkedAudioProcessor(QObject):
             self.error_occurred.emit(str(e))
 
 
-class AudioTrimProcessor(QThread):
+class AudioTrimProcessor(BaseWorkerThread):
     """Background audio trimming with progress feedback"""
 
     progress_updated = Signal(int, str)
     trim_completed = Signal(str)
-    error_occurred = Signal(str)
 
     def __init__(
         self,
@@ -263,42 +269,38 @@ class AudioTrimProcessor(QThread):
         self.end_ms = end_ms
         self.output_path = output_path
 
-    def run(self):
+    def safe_run(self):
         """Process trim operation in background"""
-        try:
-            self.progress_updated.emit(10, "Starting trim operation...")
+        self.progress_updated.emit(10, "Starting trim operation...")
 
-            # Ensure output directory exists
-            os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
 
-            self.progress_updated.emit(30, "Trimming audio segment...")
+        self.progress_updated.emit(30, "Trimming audio segment...")
 
-            # Perform the trim
-            trimmed = cast(
-                "AudioSegment", self.audio_segment[self.start_ms : self.end_ms]
-            )
+        # Perform the trim
+        trimmed = cast(
+            "AudioSegment", self.audio_segment[self.start_ms : self.end_ms]
+        )
 
-            self.progress_updated.emit(60, "Applying fade effects...")
+        self.progress_updated.emit(60, "Applying fade effects...")
 
-            # Apply fade effects
-            trimmed = trimmed.fade_in(250).fade_out(250)  # type: ignore
+        # Apply fade effects
+        trimmed = trimmed.fade_in(250).fade_out(250)  # type: ignore
 
-            self.progress_updated.emit(80, "Exporting audio file...")
+        self.progress_updated.emit(80, "Exporting audio file...")
 
-            # Export the trimmed audio
-            trimmed.export(self.output_path, format="wav")  # type: ignore
+        # Export the trimmed audio
+        trimmed.export(self.output_path, format="wav")  # type: ignore
 
-            self.progress_updated.emit(100, "Trim operation completed!")
-            self.trim_completed.emit(self.output_path)
-
-        except Exception as e:
-            self.error_occurred.emit(str(e))
+        self.progress_updated.emit(100, "Trim operation completed!")
+        self.trim_completed.emit(self.output_path)
 
 
 class ProgressDialog(QProgressDialog):
     """Enhanced progress dialog with cancellation support"""
 
-    def __init__(self, operation_name: str, parent=None):
+    def __init__(self, operation_name: str, parent: QWidget | None = None):
         super().__init__(f"{operation_name}...", "Cancel", 0, 100, parent)
         self.setWindowTitle("Processing Audio")
         self.setModal(True)
