@@ -11,9 +11,9 @@
       "99": 100.0
     },
     "data_points": 50,
-    "window_start": "2025-10-20T11:15:15.093994",
-    "window_end": "2025-10-20T12:15:15.093994",
-    "calculated_at": "2025-10-20T12:15:15.093994",
+    "window_start": "2025-10-20T14:07:28.931275",
+    "window_end": "2025-10-20T15:07:28.931275",
+    "calculated_at": "2025-10-20T15:07:28.931275",
     "config": {
       "threshold_multiplier": 3.0,
       "min_data_points": 30,
@@ -65,9 +65,9 @@
       "99": 190.0
     },
     "data_points": 60,
-    "window_start": "2025-10-19T12:15:04.653958",
-    "window_end": "2025-10-20T12:15:04.653958",
-    "calculated_at": "2025-10-20T12:15:04.653958",
+    "window_start": "2025-10-19T15:07:18.299806",
+    "window_end": "2025-10-20T15:07:18.299806",
+    "calculated_at": "2025-10-20T15:07:18.301188",
     "config": {
       "threshold_multiplier": 3.0,
       "min_data_points": 30,
