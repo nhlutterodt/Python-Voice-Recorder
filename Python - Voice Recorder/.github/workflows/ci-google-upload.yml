@@ -37,7 +37,6 @@ jobs:
   integration-upload:
     runs-on: ubuntu-latest
     needs: unit
-    if: secrets.VRP_CLIENT_SECRETS_JSON != ''
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -49,6 +48,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements_cloud.txt
       - name: Write client secrets temporarily
+        env:
+          VRP_CLIENT_SECRETS_JSON: ${{ secrets.VRP_CLIENT_SECRETS_JSON }}
         run: |
           echo "$VRP_CLIENT_SECRETS_JSON" > client_secrets.json
           chmod 600 client_secrets.json
@@ -57,4 +58,4 @@ jobs:
           python -c "print('Integration placeholder: would run a guarded smoke upload here')"
       - name: Cleanup
         run: |
-          shred -u client_secrets.json || rm -f client_secrets.json
+          rm -f client_secrets.json 2>/dev/null || true
