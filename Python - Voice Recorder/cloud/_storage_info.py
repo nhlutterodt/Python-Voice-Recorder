@@ -6,7 +6,7 @@ Extracted from GoogleDriveManager to enable component-based testing and reuse.
 """
 
 import logging
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Callable, Dict, Optional, Protocol
 
 from .exceptions import NotAuthenticatedError, APILibrariesMissingError
 from .storage_ops import format_file_size
@@ -55,16 +55,31 @@ class GoogleStorageInfo:
             raise APILibrariesMissingError("Google API libraries not available.")
 
         if not self.service:
-            from ._lazy import _import_build
-
-            credentials = self.auth_manager.get_credentials()
-            build = _import_build()
             try:
-                self.service = build(
-                    "drive", "v3", credentials=credentials, cache_discovery=False
-                )
-            except TypeError:
-                self.service = build("drive", "v3", credentials=credentials)
+                # Import the build function (may raise ImportError if Google APIs missing)
+                from ._lazy import import_build
+
+                credentials = self.auth_manager.get_credentials()
+                build: Callable[..., Any] = import_build()
+                
+                # Try with cache_discovery parameter (newer API versions)
+                try:
+                    self.service = build(
+                        "drive", "v3", credentials=credentials, cache_discovery=False
+                    )
+                except TypeError:
+                    # Fallback for older API versions that don't support cache_discovery
+                    self.service = build("drive", "v3", credentials=credentials)
+                    
+            except (ImportError, APILibrariesMissingError) as e:
+                logger.error("Failed to initialize Drive service - missing libraries: %s", e)
+                raise
+            except NotAuthenticatedError as e:
+                logger.error("Failed to initialize Drive service - not authenticated: %s", e)
+                raise
+            except Exception as e:
+                logger.error("Unexpected error initializing Drive service: %s", e)
+                raise
 
         return self.service
 

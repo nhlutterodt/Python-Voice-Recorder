@@ -9,7 +9,7 @@ Pattern: Fluent Builder Pattern with method chaining support
 """
 
 import logging
-from typing import List, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 

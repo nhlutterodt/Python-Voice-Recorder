@@ -226,20 +226,22 @@ def format_storage_info(
     
     Returns:
         Dict with formatted display strings:
-        - used: Human-readable used size
-        - limit: Human-readable limit
-        - percent: Percentage used (if both values available)
+        - used: Human-readable used size (str)
+        - limit: Human-readable limit (str)
+        - percent: Percentage used (float | None)
     
     Example:
         >>> info = format_storage_info(5368709120, 107374182400)  # 5GB / 100GB
         >>> print(f"Using {info['used']} of {info['limit']} ({info['percent']:.1f}%)")
     """
-    result = {
+    # Initialize result dict with proper types
+    result: Dict[str, Any] = {
         "used": format_file_size(used_bytes),
         "limit": format_file_size(limit_bytes),
-        "percent": None,
+        "percent": None,  # type: ignore[typeddict-unknown-key]
     }
     
+    # Calculate percentage if both values are available and limit is non-zero
     if used_bytes is not None and limit_bytes is not None and limit_bytes > 0:
         result["percent"] = (used_bytes / limit_bytes) * 100
     

@@ -29,7 +29,7 @@ class TestUploadFile:
         with patch("os.path.exists", return_value=True):
             with patch("os.path.getsize", return_value=1024):
                 with patch("cloud._file_manager.build_upload_metadata", return_value={}):
-                    with patch("cloud._lazy._import_http") as mock_import_http:
+                    with patch("cloud._lazy.import_http") as mock_import_http:
                         mock_media_upload = MagicMock()
                         mock_import_http.return_value = (mock_media_upload, None)
                         result = manager.upload_file("/path/to/file.wav")
@@ -67,7 +67,7 @@ class TestUploadFile:
         with patch("os.path.exists", return_value=True):
             with patch("os.path.getsize", return_value=1024):
                 with patch("cloud._file_manager.build_upload_metadata", return_value={}):
-                    with patch("cloud._lazy._import_http") as mock_import_http:
+                    with patch("cloud._lazy.import_http") as mock_import_http:
                         mock_media_upload = MagicMock()
                         mock_import_http.return_value = (mock_media_upload, None)
                         result = manager.upload_file("/path/to/file.wav", force=True)
@@ -110,7 +110,7 @@ class TestDownloadFile:
             return mock_media_download
 
         with patch("builtins.open", MagicMock()):
-            with patch("cloud._lazy._import_http") as mock_import_http:
+            with patch("cloud._lazy.import_http") as mock_import_http:
                 mock_import_http.return_value = (None, http_constructor)
                 result = manager.download_file("file_id", "/path/to/save.wav")
 
@@ -125,7 +125,7 @@ class TestDownloadFile:
 
         manager = GoogleFileManager(auth_manager, folder_manager, service_provider=service)
 
-        with patch("cloud._lazy._import_http", side_effect=Exception("Import error")):
+        with patch("cloud._lazy.import_http", side_effect=Exception("Import error")):
             result = manager.download_file("file_id", "/path/to/save.wav")
 
         assert result is False

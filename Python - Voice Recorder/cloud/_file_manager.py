@@ -85,10 +85,10 @@ class GoogleFileManager:
             raise APILibrariesMissingError("Google API libraries not available.")
 
         if not self.service:
-            from ._lazy import _import_build
+            from ._lazy import import_build
 
             credentials = self.auth_manager.get_credentials()
-            build = _import_build()
+            build = import_build()
             try:
                 self.service = build(
                     "drive", "v3", credentials=credentials, cache_discovery=False
@@ -158,8 +158,8 @@ class GoogleFileManager:
             )
 
             # Upload
-            from ._lazy import _import_http
-            media_file_upload, _ = _import_http()
+            from ._lazy import import_http
+            media_file_upload, _ = import_http()
             media = media_file_upload(file_path, mimetype=mime_type, resumable=True)
 
             logger.info("Uploading: %s (%.1f MB)", file_title, file_size / 1024 / 1024)
@@ -199,8 +199,8 @@ class GoogleFileManager:
         """
         try:
             service = self._get_service()
-            from ._lazy import _import_http
-            _, media_io_download = _import_http()
+            from ._lazy import import_http
+            _, media_io_download = import_http()
 
             request = service.files().get_media(fileId=file_id)
             media_download = media_io_download(request, chunksize=1024 * 256, resumable=True)

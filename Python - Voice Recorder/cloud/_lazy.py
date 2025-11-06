@@ -15,6 +15,12 @@ from typing import Any, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Module-level constant for error message (used in multiple places)
+_GOOGLE_API_ERROR_MSG = (
+    "Google API client libraries not available. "
+    "Install with: pip install google-api-python-client"
+)
+
 
 def _has_module(module_name: str) -> bool:
     """
@@ -28,7 +34,7 @@ def _has_module(module_name: str) -> bool:
     """
     try:
         return importlib.util.find_spec(module_name) is not None
-    except (ImportError, ModuleNotFoundError, ValueError):
+    except (ImportError, ValueError):
         return False
 
 
@@ -58,7 +64,7 @@ def has_google_apis_available() -> bool:
     return all(_has_module(module) for module in required)
 
 
-def _import_build() -> Any:
+def import_build() -> Any:
     """
     Lazy import and return the Drive API service builder.
     
@@ -72,27 +78,21 @@ def _import_build() -> Any:
         ImportError: If googleapiclient.discovery is not available
     
     Example:
-        >>> build = _import_build()
+        >>> build = import_build()
         >>> service = build('drive', 'v3', credentials=credentials)
     """
     if not _has_module("googleapiclient.discovery"):
-        raise ImportError(
-            "Google API client libraries not available. "
-            "Install with: pip install google-api-python-client"
-        )
+        raise ImportError(_GOOGLE_API_ERROR_MSG)
     
     try:
         from googleapiclient.discovery import build  # type: ignore
         return build  # type: ignore
     except ImportError as e:
         logger.error("Failed to import googleapiclient.discovery: %s", e)
-        raise ImportError(
-            "Google API client libraries not available. "
-            "Install with: pip install google-api-python-client"
-        ) from e
+        raise ImportError(_GOOGLE_API_ERROR_MSG) from e
 
 
-def _import_http() -> Tuple[Any, Any]:
+def import_http() -> Tuple[Any, Any]:
     """
     Lazy import and return Google Drive HTTP utilities.
     
@@ -106,7 +106,7 @@ def _import_http() -> Tuple[Any, Any]:
         ImportError: If googleapiclient.http is not available
     
     Example:
-        >>> MediaFileUpload, MediaIoBaseDownload = _import_http()
+        >>> MediaFileUpload, MediaIoBaseDownload = import_http()
         >>> media = MediaFileUpload(file_path, mimetype='audio/wav', resumable=True)
     """
     try:
@@ -117,13 +117,10 @@ def _import_http() -> Tuple[Any, Any]:
         return MediaFileUpload, MediaIoBaseDownload  # type: ignore
     except ImportError as e:
         logger.error("Failed to import googleapiclient.http: %s", e)
-        raise ImportError(
-            "Google API client libraries not available. "
-            "Install with: pip install google-api-python-client"
-        ) from e
+        raise ImportError(_GOOGLE_API_ERROR_MSG) from e
 
 
-def _import_errors() -> Any:
+def import_errors() -> Any:
     """
     Lazy import and return Google API error classes.
     
@@ -137,7 +134,7 @@ def _import_errors() -> Any:
         ImportError: If googleapiclient.errors is not available
     
     Example:
-        >>> errors = _import_errors()
+        >>> errors = import_errors()
         >>> try:
         ...     response = service.files().get(...).execute()
         ... except errors.HttpError as e:
@@ -148,7 +145,4 @@ def _import_errors() -> Any:
         return errors  # type: ignore
     except ImportError as e:
         logger.error("Failed to import googleapiclient.errors: %s", e)
-        raise ImportError(
-            "Google API client libraries not available. "
-            "Install with: pip install google-api-python-client"
-        ) from e
+        raise ImportError(_GOOGLE_API_ERROR_MSG) from e
